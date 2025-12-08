@@ -4,18 +4,31 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/coreos/go-systemd/v22/dbus"
+	"github.com/desain-gratis/common/lib/notifier"
 	"github.com/rs/zerolog/log"
 )
 
-type handler struct{}
-
-func New(ctx context.Context) {
-	go initializeListener(ctx)
+type handler struct {
+	status map[string]*DBusUnitStatus
+	topic  notifier.Topic
+	mu     *sync.RWMutex
+	ready  bool
 }
 
-func initializeListener(ctx context.Context) {
+func New(ctx context.Context, topic notifier.Topic) *handler {
+	h := &handler{
+		status: make(map[string]*DBusUnitStatus),
+		topic:  topic,
+		mu:     &sync.RWMutex{},
+	}
+	go h.initializeListener(ctx, topic)
+	return h
+}
+
+func (h *handler) initializeListener(ctx context.Context, topic notifier.Topic) {
 	// Connect to systemd
 	conn, err := dbus.NewSystemConnectionContext(ctx)
 	if err != nil {
@@ -31,10 +44,32 @@ func initializeListener(ctx context.Context) {
 	}
 
 	for _, u := range units {
-		log.Info().Msgf("unit: %v job type: %v description: %v", u.Name, u.JobType, u.Description)
-		if u.JobType == "service" {
-			fmt.Printf("%-40s %-10s %-10s\n", u.Name, u.ActiveState, u.SubState)
+		if !strings.HasSuffix(u.Name, ".service") && u.JobType != "service" {
+			continue
 		}
+		// log.Info().Msgf("unit: %v job type: %v description: %v", u.Name, u.JobType, u.Description)
+
+		m := toModel(u)
+		if _, ok := h.status[m.Name]; ok {
+			log.Warn().Msgf("conflicting name detected!?!")
+			h.status[m.Name] = new(DBusUnitStatus)
+		}
+
+		func() {
+			h.mu.Lock()
+			defer h.mu.Unlock()
+			h.status[m.Name] = &m
+		}()
+
+		topic.Broadcast(ctx, Row[DBusUnitStatus]{
+			Name: "unit",
+			Key:  m.Name,
+			Data: m,
+		})
+	}
+
+	for _, v := range h.status {
+		fmt.Printf("INID %-40s %-10s %-10s\n", v.Name, v.ActiveState, v.SubState)
 	}
 
 	fmt.Println("\n=== Watching for Service Changes ===")
@@ -45,20 +80,42 @@ func initializeListener(ctx context.Context) {
 	for {
 		select {
 		case changedUnits := <-changes:
-			for name, unit := range changedUnits {
-				// Only show services
-				if !strings.HasSuffix(unit.Name, ".service") || unit.JobType != "service" {
+			for _, unit := range changedUnits {
+				if unit == nil {
+					log.Warn().Msgf("unit is nil, skipping %v", unit)
 					continue
 				}
 
+				if !strings.HasSuffix(unit.Name, ".service") && unit.JobType != "service" {
+					continue
+				}
+				// log.Info().Msgf("unit: %v job type: %v description: %v", u.Name, u.JobType, u.Description)
+
 				fmt.Printf("[EVENT] %-40s  %-10s  %-10s\n",
-					name,
+					unit.Name,
 					unit.ActiveState,
 					unit.SubState,
 				)
+
+				// Save to memory
+				m := toModel(*unit)
+
+				func() {
+					h.mu.Lock()
+					defer h.mu.Unlock()
+					h.status[m.Name] = &m
+				}()
+
+				topic.Broadcast(ctx, Row[DBusUnitStatus]{
+					Name: "unit",
+					Key:  m.Name,
+					Data: m,
+				})
 			}
 		case err := <-errChan:
 			log.Err(err).Msgf("error received")
+		case <-ctx.Done():
+			return
 		}
 	}
 }
@@ -66,4 +123,19 @@ func initializeListener(ctx context.Context) {
 // subscribe to systemd's service
 func (h *handler) Subscribe() {
 
+}
+
+func toModel(status dbus.UnitStatus) DBusUnitStatus {
+	return DBusUnitStatus{
+		Name:        status.Name,
+		Description: status.Description,
+		LoadState:   status.LoadState,
+		ActiveState: status.ActiveState,
+		SubState:    status.SubState,
+		Followed:    status.Followed,
+		Path:        string(status.Path),
+		JobId:       status.JobId,
+		JobType:     status.JobType,
+		JobPath:     string(status.JobPath),
+	}
 }

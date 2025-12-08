@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Service Monitor</title>
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+@keyframes flash { 0% { background: rgba(255,255,0,.5); } 100% { background: transparent; } }
+.flash { animation: flash .7s ease-out; }
+
+@keyframes pop { 0% { transform: scale(.8); opacity:.5; } 100% { transform: scale(1); opacity:1; } }
+.pop { animation: pop .25s ease-out; }
+</style>
+</head>
+
+<body class="bg-gray-100 p-4">
+
+<h1 class="text-2xl font-bold text-center mb-4">DBus Service Monitor</h1>
+
+<input id="search" placeholder="Search service..."
+  class="w-full mb-4 p-2 rounded border"
+  oninput="render()">
+
+<div class="bg-white shadow rounded-lg overflow-hidden">
+  <div class="grid grid-cols-2 sm:grid-cols-4 font-semibold bg-gray-200 text-gray-700 py-2 px-3 text-sm">
+    <div>Service</div>
+    <div>Status</div>
+    <div class="hidden sm:block">Load</div>
+    <div class="hidden sm:block">Sub</div>
+  </div>
+  
+  <div id="list"></div>
+</div>
+
+<script>
+const ws   = new WebSocket("ws://localhost:9999/ws");
+const data = {};
+
+const badgeColor = s => ({
+  active: "bg-green-600 text-white",
+  activating: "bg-yellow-500 text-black",
+  failed: "bg-red-600 text-white",
+  inactive: "bg-gray-500 text-white"
+}[s] || "bg-gray-400 text-black");
+
+const statePriority = s => ({
+  active:1, activating:2, inactive:3, failed:4
+}[s] || 99);
+
+ws.onmessage = e => {
+  const msg = JSON.parse(e.data);    // wrapper object
+  const key = msg.key;
+  const newData = msg.data;
+
+  const oldState = data[key]?.active_state;
+  data[key] = newData;
+
+  render(key, oldState !== newData.active_state);
+};
+
+function render(updatedKey = null, changed = false) {
+  const q    = document.getElementById("search").value.toLowerCase();
+  const list = document.getElementById("list");
+
+  const items = Object.keys(data)
+    .filter(k => k.toLowerCase().includes(q))
+    .map(k => ({ key:k, ...data[k] }))
+    .sort((a, b) => statePriority(a.active_state) - statePriority(b.active_state));
+
+  list.innerHTML = "";
+
+  for (const svc of items) {
+    const highlight = changed && svc.key === updatedKey;
+
+    const row = document.createElement("div");
+    row.className =
+      "grid grid-cols-2 sm:grid-cols-4 border-b px-3 py-2 text-sm items-center " +
+      (highlight ? "flash" : "");
+
+    row.innerHTML = `
+      <div class="font-medium">${svc.name}</div>
+
+      <div>
+        <span class="px-2 py-1 rounded-full text-xs ${badgeColor(svc.active_state)} ${highlight ? "pop" : ""}">
+          ${svc.active_state}
+        </span>
+      </div>
+
+      <div class="hidden sm:block">${svc.load_state}</div>
+      <div class="hidden sm:block">${svc.sub_state}</div>
+
+      <!-- mobile expansion detail -->
+      <div class="col-span-2 sm:hidden text-gray-600 mt-1 text-xs">
+        <div><strong>Load:</strong> ${svc.load_state}</div>
+        <div><strong>Sub:</strong> ${svc.sub_state}</div>
+        <div><strong>Path:</strong> ${svc.path}</div>
+      </div>
+    `;
+
+    list.appendChild(row);
+  }
+}
+</script>
+
+</body>
+</html>
