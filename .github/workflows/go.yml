@@ -44,18 +44,6 @@ jobs:
           path: dist/myapp
           retention-days: 7
 
-      # ------------------------------------------
-      # GENERATE A DRAFT TAG FOR MAIN BRANCH
-      # ------------------------------------------
-      # - name: Generate draft tag
-      #   id: draft_tag
-      #   if: github.ref == 'refs/heads/main'
-      #   run: |
-      #     sha=$(git rev-parse --short HEAD)
-      #     tag="v0.0.0-main-$sha"
-      #     echo "draft_tag=$tag" >> $GITHUB_OUTPUT
-      #     echo "[INFO] Draft tag generated: $tag"
-
   draft-release:
     needs: build
     runs-on: ubuntu-latest
