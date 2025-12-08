@@ -49,18 +49,11 @@ jobs:
           name: myapp-linux-amd64
           path: release
 
-      - name: Create GitHub Release (if missing)
-        run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          gh release create "$TAG" \
-            --notes "Automated release for $TAG" \
-            --title "$TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            || echo "Release already exists"
-
-      - name: Upload asset to release
-        run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          gh release upload "$TAG" release/myapp \
-            --repo "$GITHUB_REPOSITORY" \
-            --clobber
+      - name: Release using softprops
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/myapp
+          body: "Automated release for ${{ github.ref_name }}"
+          name: ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
