@@ -72,19 +72,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          latest=$(gh release list --limit 1 --json tagName --jq '.[0].tagName' || true)
+          # Get latest NON-DRAFT release tag
+          latest=$(gh release list --limit 20 --json tagName,isDraft \
+            --jq '.[] | select(.isDraft==false) | .tagName' | head -n1)
 
           if [ -z "$latest" ]; then
             next="v0.1.0"
           else
-            latest="${latest#v}"
-            IFS='.' read -r major minor patch <<< "$latest"
-            patch=$((patch + 1))
-            next="v${major}.${minor}.${patch}"
+            ver=${latest#v}
+            IFS='.' read -r M m p <<< "$ver"
+            next="v$M.$m.$((p+1))"
           fi
 
           echo "next_tag=$next" >> $GITHUB_OUTPUT
-          echo "Next tag: $next"
+          echo "Next version = $next"
 
       # ------------------------------------------
       # DELETE EXISTING DRAFT WITH SAME TAG
