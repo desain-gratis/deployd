@@ -22,5 +22,5 @@ func main() {
 	signal.Notify(sigint, os.Interrupt)
 	log.Info().Msgf("WAITING FOR SIGINT")
 	<-sigint
-	log.Info().Msgf("SIGINT RECEIVED")
+	log.Info().Msgf("SIGINT RECEIVED :)")
 }
