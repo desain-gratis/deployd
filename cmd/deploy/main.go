@@ -20,7 +20,7 @@ func main() {
 
 	sigint := make(chan os.Signal, 1)
 	signal.Notify(sigint, os.Interrupt)
-	log.Info().Msgf("WAITING FOR SIGINT")
+	log.Info().Msgf("WAITING FOR SIGINT :)")
 	<-sigint
 	log.Info().Msgf("SIGINT RECEIVED :)")
 }
