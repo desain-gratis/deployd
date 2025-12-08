@@ -50,7 +50,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
 
     permissions:
-      contents: write  # needed for release creation
+      contents: write
 
     steps:
       - name: Checkout repo
@@ -72,25 +72,41 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Get latest release tag
           latest=$(gh release list --limit 1 --json tagName --jq '.[0].tagName' || true)
 
           if [ -z "$latest" ]; then
             next="v0.1.0"
           else
-            echo "Latest release: $latest"
             latest="${latest#v}"
-
             IFS='.' read -r major minor patch <<< "$latest"
-            patch=$((patch+1))
+            patch=$((patch + 1))
             next="v${major}.${minor}.${patch}"
           fi
 
           echo "next_tag=$next" >> $GITHUB_OUTPUT
-          echo "Next tag = $next"
+          echo "Next tag: $next"
 
       # ------------------------------------------
-      # WRITE CHANGELOG (COMMITS SINCE LAST RELEASE)
+      # DELETE EXISTING DRAFT WITH SAME TAG
+      # ------------------------------------------
+      - name: Delete existing draft (if present)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${{ steps.semver.outputs.next_tag }}"
+
+          # Check if a draft release with this tag exists
+          draft_id=$(gh release view "$tag" --json isDraft --jq '.isDraft' 2>/dev/null || echo "false")
+
+          if [ "$draft_id" = "true" ]; then
+            echo "Found existing draft release for $tag — deleting it."
+            gh release delete "$tag" --yes
+          else
+            echo "No existing draft to delete."
+          fi
+
+      # ------------------------------------------
+      # GENERATE CHANGELOG
       # ------------------------------------------
       - name: Generate changelog
         id: changelog
@@ -107,7 +123,7 @@ jobs:
           fi
 
       # ------------------------------------------
-      # CREATE DRAFT RELEASE WITH SOFTPROPS
+      # CREATE NEW DRAFT RELEASE (SOFTPROPS)
       # ------------------------------------------
       - name: Create draft release
         uses: softprops/action-gh-release@v2
