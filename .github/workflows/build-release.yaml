@@ -49,9 +49,6 @@ jobs:
           name: myapp-linux-amd64
           path: release
 
-      - name: Install GitHub CLI
-        uses: cli/cli/action-install@v2
-
       - name: Create GitHub Release (if missing)
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
