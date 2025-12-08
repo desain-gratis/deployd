@@ -47,12 +47,87 @@ jobs:
       # ------------------------------------------
       # GENERATE A DRAFT TAG FOR MAIN BRANCH
       # ------------------------------------------
-      - name: Generate draft tag
-        id: draft_tag
-        if: github.ref == 'refs/heads/main'
-        run: |
-          sha=$(git rev-parse --short HEAD)
-          tag="v0.0.0-main-$sha"
-          echo "draft_tag=$tag" >> $GITHUB_OUTPUT
-          echo "[INFO] Draft tag generated: $tag"
+      # - name: Generate draft tag
+      #   id: draft_tag
+      #   if: github.ref == 'refs/heads/main'
+      #   run: |
+      #     sha=$(git rev-parse --short HEAD)
+      #     tag="v0.0.0-main-$sha"
+      #     echo "draft_tag=$tag" >> $GITHUB_OUTPUT
+      #     echo "[INFO] Draft tag generated: $tag"
 
+  draft-release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: write  # needed for release creation
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: myapp-linux-amd64
+          path: release
+
+      # ------------------------------------------
+      # AUTO-INCREMENT SEMVER TAG
+      # ------------------------------------------
+      - name: Determine next semver version
+        id: semver
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get latest release tag
+          latest=$(gh release list --limit 1 --json tagName --jq '.[0].tagName' || true)
+
+          if [ -z "$latest" ]; then
+            next="v0.1.0"
+          else
+            echo "Latest release: $latest"
+            latest="${latest#v}"
+
+            IFS='.' read -r major minor patch <<< "$latest"
+            patch=$((patch+1))
+            next="v${major}.${minor}.${patch}"
+          fi
+
+          echo "next_tag=$next" >> $GITHUB_OUTPUT
+          echo "Next tag = $next"
+
+      # ------------------------------------------
+      # WRITE CHANGELOG (COMMITS SINCE LAST RELEASE)
+      # ------------------------------------------
+      - name: Generate changelog
+        id: changelog
+        run: |
+          last_tag=$(git tag --sort=-creatordate | head -n 1)
+
+          if [ -z "$last_tag" ]; then
+            echo "log=Initial release" >> $GITHUB_OUTPUT
+          else
+            log=$(git log "$last_tag"..HEAD --pretty=format:"- %s (%h)")
+            echo "log<<EOF" >> $GITHUB_OUTPUT
+            echo "$log" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
+
+      # ------------------------------------------
+      # CREATE DRAFT RELEASE WITH SOFTPROPS
+      # ------------------------------------------
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          tag_name: ${{ steps.semver.outputs.next_tag }}
+          name: ${{ steps.semver.outputs.next_tag }}
+          body: ${{ steps.changelog.outputs.log }}
+          files: release/myapp
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
