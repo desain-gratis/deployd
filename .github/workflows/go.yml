@@ -72,9 +72,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # ------------------------------------------
-      # ENSURE GIT TAG EXISTS BEFORE UPLOADING
-      # ------------------------------------------
       - name: Ensure draft tag exists in git
         run: |
           tag="${{ needs.build.outputs.draft_tag }}"
