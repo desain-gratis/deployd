@@ -55,7 +55,7 @@ func (h *httpHandler) StreamUnit(w http.ResponseWriter, r *http.Request, p httpr
 		defer pcancel()
 
 		for {
-			t, _, err := c.Read(pctx)
+			t, payload, err := c.Read(pctx)
 			if websocket.CloseStatus(err) > 0 {
 				return
 			}
@@ -66,6 +66,13 @@ func (h *httpHandler) StreamUnit(w http.ResponseWriter, r *http.Request, p httpr
 
 			if t == websocket.MessageBinary {
 				log.Info().Msgf("cannot read la")
+				continue
+			}
+
+			log.Info().Msgf("uhui: %v", string(payload))
+			err = h.parseMessage(payload)
+			if err != nil {
+				log.Err(err).Msgf("error parsing command")
 				continue
 			}
 
@@ -198,6 +205,55 @@ func (h *httpHandler) sendToClient(ctx context.Context, wsconn *websocket.Conn, 
 	}
 
 	err = wsconn.Write(ctx, websocket.MessageText, payload)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type Command struct {
+	Name string          `json:"name"`
+	Data json.RawMessage `json:"data"`
+}
+
+// {"name":"dbus", "data": {"action": "start", "unit": "nginx.service"} }
+
+type DBusCommand struct {
+	Action string `json:"action"`
+	Unit   string `json:"unit"`
+}
+
+func (h *httpHandler) parseMessage(message []byte) error {
+	var cmd Command
+	err := json.Unmarshal(message, &cmd)
+	if err != nil {
+		return err
+	}
+
+	if cmd.Name == "dbus" {
+		return h.handleDbusCommand(cmd.Data)
+	}
+
+	return nil
+}
+
+func (h *httpHandler) handleDbusCommand(data json.RawMessage) error {
+	var cmd DBusCommand
+	err := json.Unmarshal(data, &cmd)
+	if err != nil {
+		return err
+	}
+
+	switch cmd.Action {
+	case "start":
+		_, err = h.dbusConn.StartUnitContext(context.Background(), cmd.Unit, "replace", nil)
+	case "stop":
+		_, err = h.dbusConn.StopUnitContext(context.Background(), cmd.Unit, "replace", nil)
+	default:
+		return nil
+	}
+
 	if err != nil {
 		return err
 	}

@@ -12,10 +12,11 @@ import (
 )
 
 type handler struct {
-	status map[string]*DBusUnitStatus
-	topic  notifier.Topic
-	mu     *sync.RWMutex
-	ready  bool
+	status   map[string]*DBusUnitStatus
+	topic    notifier.Topic
+	mu       *sync.RWMutex
+	ready    bool
+	dbusConn *dbus.Conn
 }
 
 func New(ctx context.Context, topic notifier.Topic) *handler {
@@ -25,6 +26,14 @@ func New(ctx context.Context, topic notifier.Topic) *handler {
 		mu:     &sync.RWMutex{},
 	}
 	go h.initializeListener(ctx, topic)
+
+	conn, err := dbus.NewSystemConnectionContext(ctx)
+	if err != nil {
+		log.Fatal().Msgf("Failed to connect to systemd via DBus: %v", err)
+	}
+
+	h.dbusConn = conn
+
 	return h
 }
 

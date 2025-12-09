@@ -1,108 +1,144 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Service Monitor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="https://cdn.tailwindcss.com"></script>
-
-<style>
-@keyframes flash { 0% { background: rgba(255,255,0,.5); } 100% { background: transparent; } }
-.flash { animation: flash .7s ease-out; }
-
-@keyframes pop { 0% { transform: scale(.8); opacity:.5; } 100% { transform: scale(1); opacity:1; } }
-.pop { animation: pop .25s ease-out; }
-</style>
+<title>DBus Monitor</title>
 </head>
 
-<body class="bg-gray-100 p-4">
+<body class="bg-gray-100 p-3">
 
-<h1 class="text-2xl font-bold text-center mb-4">DBus Service Monitor</h1>
+<h1 class="text-xl font-bold mb-3">Systemd Services</h1>
 
-<input id="search" placeholder="Search service..."
-  class="w-full mb-4 p-2 rounded border"
-  oninput="render()">
+<input id="search" type="text"
+  placeholder="Search services..."
+  class="w-full p-2 rounded border mb-3" />
 
-<div class="bg-white shadow rounded-lg overflow-hidden">
-  <div class="grid grid-cols-2 sm:grid-cols-4 font-semibold bg-gray-200 text-gray-700 py-2 px-3 text-sm">
-    <div>Service</div>
-    <div>Status</div>
-    <div class="hidden sm:block">Load</div>
-    <div class="hidden sm:block">Sub</div>
-  </div>
-  
-  <div id="list"></div>
-</div>
+<div id="list" class="space-y-2"></div>
 
 <script>
-const ws   = new WebSocket("ws://localhost:9999/ws");
-const data = {};
+/* -----------------------------------------------------
+   STATE (Fast lookup maps)
+----------------------------------------------------- */
+const services = {};       // key → data
+const elements = {};       // key → DOM row
 
-const badgeColor = s => ({
-  active: "bg-green-600 text-white",
-  activating: "bg-yellow-500 text-black",
-  failed: "bg-red-600 text-white",
-  inactive: "bg-gray-500 text-white"
-}[s] || "bg-gray-400 text-black");
+/* -----------------------------------------------------
+   WEBSOCKET
+----------------------------------------------------- */
+const ws = new WebSocket("ws://localhost:9999/ws");
 
-const statePriority = s => ({
-  active:1, activating:2, inactive:3, failed:4
-}[s] || 99);
+ws.onmessage = (event) => {
+  let msg;
+  try { msg = JSON.parse(event.data); } catch { return }
 
-ws.onmessage = e => {
-  const msg = JSON.parse(e.data);    // wrapper object
-  const key = msg.key;
-  const newData = msg.data;
+  if (!msg.key || !msg.data) return;
 
-  const oldState = data[key]?.active_state;
-  data[key] = newData;
-
-  render(key, oldState !== newData.active_state);
+  updateService(msg.key, msg.data);
 };
 
-function render(updatedKey = null, changed = false) {
-  const q    = document.getElementById("search").value.toLowerCase();
-  const list = document.getElementById("list");
+/* -----------------------------------------------------
+   DOM UPDATE (ultra fast)
+----------------------------------------------------- */
+function updateService(key, data) {
+  services[key] = data;
 
-  const items = Object.keys(data)
-    .filter(k => k.toLowerCase().includes(q))
-    .map(k => ({ key:k, ...data[k] }))
-    .sort((a, b) => statePriority(a.active_state) - statePriority(b.active_state));
+  if (elements[key]) {
+    updateRow(elements[key], data);
+  } else {
+    const el = createRow(key, data);
+    elements[key] = el;
+    document.getElementById("list").appendChild(el);
+  }
 
-  list.innerHTML = "";
+  applySearch();
+}
 
-  for (const svc of items) {
-    const highlight = changed && svc.key === updatedKey;
+/* -----------------------------------------------------
+   ELEMENT TEMPLATES
+----------------------------------------------------- */
+function createRow(key, data) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "bg-white rounded shadow";
 
-    const row = document.createElement("div");
-    row.className =
-      "grid grid-cols-2 sm:grid-cols-4 border-b px-3 py-2 text-sm items-center " +
-      (highlight ? "flash" : "");
+  wrapper.innerHTML = `
+    <button class="w-full flex justify-between p-3 text-left font-semibold">
+      <span class="service-name"></span>
+      <span class="badge text-white text-xs px-2 py-1 rounded"></span>
+    </button>
 
-    row.innerHTML = `
-      <div class="font-medium">${svc.name}</div>
+    <div class="details hidden px-3 pb-3 text-sm space-y-1">
+      <div><b>Description:</b> <span class="desc"></span></div>
+      <div><b>Load:</b> <span class="load"></span></div>
+      <div><b>Active:</b> <span class="active"></span></div>
+      <div><b>Sub:</b> <span class="sub"></span></div>
 
-      <div>
-        <span class="px-2 py-1 rounded-full text-xs ${badgeColor(svc.active_state)} ${highlight ? "pop" : ""}">
-          ${svc.active_state}
-        </span>
+      <div class="mt-2 flex gap-2">
+        <button class="start px-3 py-1 bg-green-600 text-white rounded text-xs">Start</button>
+        <button class="stop px-3 py-1 bg-red-600 text-white rounded text-xs">Stop</button>
       </div>
+    </div>
+  `;
 
-      <div class="hidden sm:block">${svc.load_state}</div>
-      <div class="hidden sm:block">${svc.sub_state}</div>
+  const btn = wrapper.querySelector("button");
+  const details = wrapper.querySelector(".details");
+  btn.onclick = () => { details.classList.toggle("hidden") };
 
-      <!-- mobile expansion detail -->
-      <div class="col-span-2 sm:hidden text-gray-600 mt-1 text-xs">
-        <div><strong>Load:</strong> ${svc.load_state}</div>
-        <div><strong>Sub:</strong> ${svc.sub_state}</div>
-        <div><strong>Path:</strong> ${svc.path}</div>
-      </div>
-    `;
+  wrapper.querySelector(".start").onclick = () => sendAction("start", key);
+  wrapper.querySelector(".stop").onclick = () => sendAction("stop", key);
 
-    list.appendChild(row);
+  updateRow(wrapper, data);
+  return wrapper;
+}
+
+function updateRow(el, d) {
+  el.querySelector(".service-name").textContent = d.name;
+  el.querySelector(".desc").textContent = d.description;
+  el.querySelector(".load").textContent = d.load_state;
+  el.querySelector(".active").textContent = d.active_state;
+  el.querySelector(".sub").textContent = d.sub_state;
+
+  const badge = el.querySelector(".badge");
+  badge.textContent = d.active_state;
+
+  badge.className = "badge text-white text-xs px-2 py-1 rounded";
+
+  if (d.active_state === "active") badge.classList.add("bg-green-600");
+  else if (d.active_state === "failed") badge.classList.add("bg-red-600");
+  else badge.classList.add("bg-gray-600");
+}
+
+/* -----------------------------------------------------
+   SEND ACTION (no server echo expected)
+----------------------------------------------------- */
+function sendAction(action, key) {
+  ws.send(JSON.stringify({
+    name: "dbus",
+    data: { action, unit: key }
+  }));
+}
+
+/* -----------------------------------------------------
+   SEARCH (fast debounce)
+----------------------------------------------------- */
+let searchTimer = null;
+
+document.getElementById("search").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(applySearch, 100);
+});
+
+function applySearch() {
+  const q = document.getElementById("search").value.toLowerCase();
+
+  for (const key in elements) {
+    const match =
+      key.toLowerCase().includes(q) ||
+      services[key].name.toLowerCase().includes(q);
+
+    elements[key].style.display = match ? "block" : "none";
   }
 }
 </script>
-
 </body>
 </html>
