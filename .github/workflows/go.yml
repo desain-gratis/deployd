@@ -32,7 +32,7 @@ jobs:
       - name: Test
         run: go test -v ./...
 
-      - name: Build
+      - name: Build deployd
         run: |
           mkdir -p dist
           GOOS=linux GOARCH=amd64 go build -o dist/myapp -v ./cmd/deployd/*.go
