@@ -35,7 +35,7 @@ jobs:
       - name: Build
         run: |
           mkdir -p dist
-          GOOS=linux GOARCH=amd64 go build -o dist/myapp -v ./cmd/deploy/*.go
+          GOOS=linux GOARCH=amd64 go build -o dist/myapp -v ./cmd/deployd/*.go
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
