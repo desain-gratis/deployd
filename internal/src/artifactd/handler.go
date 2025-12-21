@@ -11,7 +11,9 @@ type handler struct {
 	conn driver.Conn
 }
 
-// Non Raft implementation of artifactd
+// A datawriter app / log app, the core logic is in the query; not on any higher-level abstraction
+
+// Common logic for the data writer
 func New(conn driver.Conn) *handler {
 	return &handler{
 		conn: conn,

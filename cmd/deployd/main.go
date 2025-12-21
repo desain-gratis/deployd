@@ -10,11 +10,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	notifier_impl "github.com/desain-gratis/common/lib/notifier/impl"
 	"github.com/julienschmidt/httprouter"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	mycontentapi "github.com/desain-gratis/common/delivery/mycontent-api"
+	mycontent_base "github.com/desain-gratis/common/delivery/mycontent-api/mycontent/base"
+	blob_s3 "github.com/desain-gratis/common/delivery/mycontent-api/storage/blob/s3"
+	content_clickhouse "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/clickhouse"
+	"github.com/desain-gratis/deploy/internal/src/artifactd"
 	"github.com/desain-gratis/deploy/internal/src/systemd"
 )
 
@@ -26,8 +32,13 @@ func main() {
 	ctx, cancel := context.WithCancelCause(context.Background())
 
 	wg := new(sync.WaitGroup)
+	router := httprouter.New()
 
-	enableSystemdModule(ctx, wg)
+	enableSystemdModule(ctx, router)
+	enableArtifactUploadModule(ctx, router)
+	enableArtifactDiscoveryModule(ctx, router)
+
+	go startRouter(ctx, wg, router, config.GetString("http.public.address"))
 
 	sigint := make(chan os.Signal, 1)
 	signal.Notify(sigint, os.Interrupt)
@@ -38,26 +49,99 @@ func main() {
 	log.Info().Msgf("Bye bye")
 }
 
-func enableSystemdModule(ctx context.Context, wg *sync.WaitGroup) {
-	router := httprouter.New()
+func enableSystemdModule(ctx context.Context, router *httprouter.Router) {
 	topic := notifier_impl.NewStandardTopic()
 
 	integration := systemd.New(ctx, topic)
 	httpIntegration := systemd.Http(integration)
 
 	router.GET("/ws", httpIntegration.StreamUnit)
+}
+
+// enableArtifactUploadModule enables a key-value store to store build artifact based on commit ID
+func enableArtifactUploadModule(_ context.Context, router *httprouter.Router) {
+	conn, err := config.getClickhouseConn("content")
+	if err != nil {
+		return
+	}
+
+	baseURL := config.GetString("http.public.fqdn")
+
+	// storage for linux amd64 build artifact
+	linuxAmd64Archive := content_clickhouse.New(conn, "linux_amd64", 0)
+	linuxAmd64ArchiveBlob, err := blob_s3.New(
+		config.GetString("storage.s3.blob.endpoint"),
+		config.GetString("storage.s3.blob.key_id"),
+		config.GetString("storage.s3.blob.key_secret"),
+		config.GetBool("storage.s3.blob.use_ssl"),
+		config.GetString("storage.s3.blob.bucket_name"),
+		config.GetString("storage.s3.blob.base_public_url"),
+	)
+	if err != nil {
+		log.Fatal().Msgf("failure to create blob storage client: %v", err)
+	}
+
+	linuxAmd64Handler := mycontentapi.NewAttachment(
+		mycontent_base.NewAttachment(
+			linuxAmd64Archive,
+			2,
+			linuxAmd64ArchiveBlob,
+			false,               // hide the s3 URL
+			"assets/user/image", // the location in the s3 compatible bucket
+		),
+		baseURL+"/org/user/thumbnail",
+		[]string{"org_id", "profile_id"},
+		"",
+	)
+
+	// <os>/<arch>
+	router.GET("/linux/amd64", linuxAmd64Handler.Get)
+	router.POST("/linux/amd64", linuxAmd64Handler.Upload)
+	router.DELETE("/linux/amd64", linuxAmd64Handler.Delete)
+
+}
+
+// enableArtifactDiscoveryModule enables upload artifact discovery / metadata query
+func enableArtifactDiscoveryModule(_ context.Context, router *httprouter.Router) {
+	var ch driver.Conn
+
+	handler := artifactd.New(ch)
+	httpHandler := artifactd.Http(handler)
+	raftHandler := artifactd.HttpRaftHandler(nil, 0, 1, nil, nil)
+	_ = raftHandler
+	// Stream all latest commit
+	router.GET("/ws", httpHandler.StreamAll)
+}
+
+// TODO: refactor for multiple http server
+func startRouter(ctx context.Context, wg *sync.WaitGroup, router *httprouter.Router, address string) {
+	// global cors handlign
+	router.HandleOPTIONS = true
+	router.GlobalOPTIONS = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	withCors := func(router http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			header := w.Header()
+			header.Set("Access-Control-Allow-Methods", "*")
+			header.Set("Access-Control-Allow-Origin", "*")
+			header.Set("Access-Control-Allow-Methods", "*")
+			header.Set("Access-Control-Allow-Headers", "*")
+			router.ServeHTTP(w, r)
+		})
+	}
 
 	wsWg := &sync.WaitGroup{}
-	server := http.Server{
-		Addr:        ":9999",
-		Handler:     withCors(router),
-		ReadTimeout: 2 * time.Second,
+	server := &http.Server{
+		Addr:    address,
+		Handler: withCors(router),
+		// ReadTimeout: 2 * time.Second,
 
 		// important: do not set WriteTimeout if we enable long running connection like this example
 		// WriteTimeout: 15 * time.Second,
 
 		BaseContext: func(l net.Listener) context.Context {
-			// inject with application context.
 			ctx := context.WithValue(ctx, "ws-wg", wsWg)
 			return ctx
 		},
@@ -67,28 +151,30 @@ func enableSystemdModule(ctx context.Context, wg *sync.WaitGroup) {
 	go func() {
 		defer wg.Done()
 
-		if err := server.ListenAndServe(); err != http.ErrServerClosed {
-			// Error starting or closing listener:
-			log.Fatal().Msgf("HTTP server ListendAndServe: %v", err)
-		}
-	}()
-
-	go func() {
-		// wait main context to finish
 		<-ctx.Done()
 
-		// wait for http server shutdown
-		closeCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		// close HTTP connection
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		if err := server.Shutdown(closeCtx); err != nil {
+
+		log.Info().Msgf("Shutting down HTTP server..")
+		if err := server.Shutdown(ctx); err != nil {
 			// Error from closing listeners, or context timeout:
 			log.Err(err).Msgf("HTTP server Shutdown")
 		}
 
-		// now, wait for closed websocket connection
-		// web socket uses ctx, so it should be the same
+		log.Info().Msgf("Waiting for websocket connection to close..")
 		wsWg.Wait()
 	}()
+
+	// TODO: maybe can use this for more graceful handling
+	// server.RegisterOnShutdown()
+
+	log.Info().Msgf("Serving at %v..\n", server.Addr)
+	if err := server.ListenAndServe(); err != http.ErrServerClosed {
+		// Error starting or closing listener:
+		log.Fatal().Msgf("HTTP server ListendAndServe: %v", err)
+	}
 }
 
 func withCors(router http.Handler) http.Handler {
