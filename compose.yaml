@@ -1,0 +1,194 @@
+services:
+  deployd1:
+    image: deployd:latest
+    # restart: on-failure
+    env_file: ".env"
+    environment:
+      CONFIG: /etc/deployd/local.yml
+      DC: "/etc/dragonboat.yaml"
+      TZ: Asia/Jakarta
+      DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
+    ports:
+      - "9401:9500"
+    volumes:
+      - ./config/deployd:/etc/deployd
+      - ./config/deployd/raft/config-1.yaml:/etc/dragonboat.yaml
+      - ./tmp/data/data-1:/data
+      - ./tmp/dbus:/dbus
+    depends_on:
+      - clickhouse-deployd1
+      - mock-systemd
+    networks:
+      - docker-dev_appnet
+    command: ["./deployd"]
+  deployd2:
+    image: deployd:latest
+    restart: on-failure
+    env_file: ".env"
+    environment:
+      CONFIG: /etc/deployd/local.yml
+      DC: "/etc/dragonboat.yaml"
+      TZ: Asia/Jakarta
+      DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
+    ports:
+      - "9402:9500"
+    volumes:
+      - ./config/deployd:/etc/deployd
+      - ./config/deployd/raft/config-2.yaml:/etc/dragonboat.yaml
+      - ./tmp/data/data-2:/data
+      - ./tmp/dbus:/dbus
+    depends_on:
+      - clickhouse-deployd2
+      - mock-systemd
+    networks:
+      - docker-dev_appnet
+    command: ["./deployd"]
+  deployd3:
+    image: deployd:latest
+    restart: on-failure
+    env_file: ".env"
+    environment:
+      CONFIG: /etc/deployd/local.yml
+      DC: "/etc/dragonboat.yaml"
+      TZ: Asia/Jakarta
+      DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
+    ports:
+      - "9403:9500"
+    volumes:
+      - ./config/deployd:/etc/deployd
+      - ./config/deployd/raft/config-3.yaml:/etc/dragonboat.yaml
+      - ./tmp/data/data-3:/data
+      - ./tmp/dbus:/dbus
+    depends_on:
+      - clickhouse-deployd3
+      - mock-systemd
+    networks:
+      - docker-dev_appnet
+    command: ["./deployd"]
+
+  clickhouse-deployd1:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse-deployd1
+    restart: on-failure
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: default
+    ports:
+      - "8801:8123"
+      - "9901:9000"
+    volumes:
+      - ./tmp/data/clickhouse_data_deployd1:/var/lib/clickhouse
+      # - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - docker-dev_appnet # you need to create docker-dev folder with compose file in itfor the minio
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    deploy:
+      resources:
+        limits:
+          memory: 2G # Sets a memory limit of 1 Gigabyte
+        reservations:
+          memory: 1G
+
+  clickhouse-deployd2:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse-deployd2
+    restart: on-failure
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: default
+    ports:
+      - "8802:8123"
+      - "9902:9000"
+    volumes:
+      - ./tmp/data/clickhouse_data_deployd2:/var/lib/clickhouse
+      # - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - docker-dev_appnet
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    deploy:
+      resources:
+        limits:
+          memory: 2G # Sets a memory limit of 1 Gigabyte
+        reservations:
+          memory: 1G
+
+  clickhouse-deployd3:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse-deployd3
+    restart: on-failure
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: default
+    ports:
+      - "8803:8123"
+      - "9903:9000"
+    volumes:
+      - ./tmp/data/clickhouse_data_deployd3:/var/lib/clickhouse
+      # - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - docker-dev_appnet
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    deploy:
+      resources:
+        limits:
+          memory: 2G # Sets a memory limit of 1 Gigabyte
+        reservations:
+          memory: 1G
+
+  clickhouse-content:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse-content
+    restart: on-failure
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: default
+    ports:
+      - "8804:8123"
+      - "9904:9000"
+    volumes:
+      - ./tmp/data/clickhouse_data_content:/var/lib/clickhouse
+      # - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - docker-dev_appnet
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    deploy:
+      resources:
+        limits:
+          memory: 2G # Sets a memory limit of 1 Gigabyte
+        reservations:
+          memory: 1G
+
+  mock-systemd:
+    image: ghcr.io/balena-os/mock-systemd-bus@sha256:79b92200fb6481edfea9776a75d6bf3fd8583b79b7e83868f49ba7b295f397ce
+    # Necessary to run systemd in a container
+    privileged: true
+    volumes:
+      - ./tmp/dbus:/shared/dbus
+    environment:
+      # Set this variable with the location of your shared bus socket
+      # NOTE: do not use /run/dbus as this path is overwritten by systemd
+      # Pinned for reproducibility https://github.com/balena-os/mock-systemd-bus/pkgs/container/mock-systemd-bus
+      DBUS_SYSTEM_BUS_ADDRESS: unix:path=/shared/dbus/system_bus_socket
+      # Optionally set-up any mock units you need. Service files for these
+      # Will be created on service start
+      MOCK_SYSTEMD_UNITS: fakemill.service
+
+volumes:
+  config:
+    driver: local
+
+networks:
+  docker-dev_appnet:
+    external: true

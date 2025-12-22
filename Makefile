@@ -1,5 +1,15 @@
+include .env
+
+clean-wsl: 
+	docker compose down -v # important for wsl
+	sudo rm -rf ./tmp           
+
+clean:
+	rm -rf ./tmp
+	
 build:
-	GOOS=linux GOARCH=amd64 go build -o deployd cmd/deployd/*.go
-	GOOS=linux GOARCH=amd64 go build -o artifactd cmd/artifactd/*.go
+	CGO_ENABLED=0 GOOS=linux go build -o deployd cmd/deployd/*.go
+	docker build . -t deployd
+
 run:
-	go run cmd/deployd/*.go
+	docker compose up

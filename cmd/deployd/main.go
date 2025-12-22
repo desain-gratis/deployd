@@ -31,6 +31,8 @@ func init() {
 func main() {
 	ctx, cancel := context.WithCancelCause(context.Background())
 
+	initConfig()
+
 	wg := new(sync.WaitGroup)
 	router := httprouter.New()
 
@@ -110,7 +112,7 @@ func enableArtifactDiscoveryModule(_ context.Context, router *httprouter.Router)
 	raftHandler := artifactd.HttpRaftHandler(nil, 0, 1, nil, nil)
 	_ = raftHandler
 	// Stream all latest commit
-	router.GET("/ws", httpHandler.StreamAll)
+	router.GET("/discovery", httpHandler.StreamAll)
 }
 
 // TODO: refactor for multiple http server
