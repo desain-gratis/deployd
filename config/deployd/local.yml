@@ -3,6 +3,9 @@ http:
     address: ":9600"
     fqdn: http://localhost:9401
 
+ui:
+  dir: "/var/www"
+
 storage:
   s3:
     blob:

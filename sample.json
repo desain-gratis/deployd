@@ -1,0 +1,17 @@
+{
+    "namespace": "desain-gratis",
+    "name": "hello",
+    "commit_id": "a324adf2e",
+    "branch": "dev",
+    "actor": "keenan",
+    "tag": "v1.0",
+    "data": {
+        "messsage": "sample data"
+    },
+    "published_at": "2025-12-31T08:00:00+07:00",
+    "source": "github",
+    "os_arch": [
+        "linux/amd64",
+        "linux/aarch64"
+    ]
+}

@@ -10,8 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	notifier_impl "github.com/desain-gratis/common/lib/notifier/impl"
+	raft_replica "github.com/desain-gratis/common/lib/raft/replica"
+	raft_runner "github.com/desain-gratis/common/lib/raft/runner"
 	"github.com/julienschmidt/httprouter"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -33,12 +34,18 @@ func main() {
 
 	initConfig()
 
+	err := raft_replica.Init()
+	if err != nil {
+		log.Panic().Msgf("failed to init raft: %v", err)
+	}
+
 	wg := new(sync.WaitGroup)
 	router := httprouter.New()
 
 	enableSystemdModule(ctx, router)
 	enableArtifactUploadModule(ctx, router)
 	enableArtifactDiscoveryModule(ctx, router)
+	enableUI(ctx, router)
 
 	go startRouter(ctx, wg, router, config.GetString("http.public.address"))
 
@@ -49,6 +56,10 @@ func main() {
 	cancel(errors.New("server closed"))
 	wg.Wait()
 	log.Info().Msgf("Bye bye")
+}
+
+func enableUI(ctx context.Context, router *httprouter.Router) {
+	router.ServeFiles("/ui/*filepath", http.Dir(config.GetString("ui.dir")))
 }
 
 func enableSystemdModule(ctx context.Context, router *httprouter.Router) {
@@ -92,27 +103,31 @@ func enableArtifactUploadModule(_ context.Context, router *httprouter.Router) {
 			"assets/user/image", // the location in the s3 compatible bucket
 		),
 		baseURL+"/org/user/thumbnail",
-		[]string{"org_id", "profile_id"},
+		[]string{},
 		"",
 	)
 
 	// <os>/<arch>
-	router.GET("/linux/amd64", linuxAmd64Handler.Get)
-	router.POST("/linux/amd64", linuxAmd64Handler.Upload)
-	router.DELETE("/linux/amd64", linuxAmd64Handler.Delete)
-
+	router.GET("/artifactd/linux/amd64", linuxAmd64Handler.Get)
+	router.POST("/artifactd/linux/amd64", linuxAmd64Handler.Upload)
+	router.DELETE("/artifactd/linux/amd64", linuxAmd64Handler.Delete)
 }
 
 // enableArtifactDiscoveryModule enables upload artifact discovery / metadata query
 func enableArtifactDiscoveryModule(_ context.Context, router *httprouter.Router) {
-	var ch driver.Conn
+	raft_runner.ForEachReplica[any]("artifactd", func(ctx context.Context) error {
+		outbox := notifier_impl.NewStandardTopic()
 
-	handler := artifactd.New(ch)
-	httpHandler := artifactd.Http(handler)
-	raftHandler := artifactd.HttpRaftHandler(nil, 0, 1, nil, nil)
-	_ = raftHandler
-	// Stream all latest commit
-	router.GET("/discovery", httpHandler.StreamAll)
+		raftHttpHandler := artifactd.NewHttpRaftHandler(ctx, outbox)
+
+		router.POST("/artifactd/register", raftHttpHandler.RegisterArtifact)
+		router.GET("/artifactd/discover", raftHttpHandler.DiscoverArtifact)
+		router.GET("/artifactd/ws", raftHttpHandler.StreamAll)
+
+		sapp := artifactd.NewRaft()
+
+		return raft_runner.Run(ctx, sapp)
+	})
 }
 
 // TODO: refactor for multiple http server

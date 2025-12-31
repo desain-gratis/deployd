@@ -16,3 +16,8 @@ replica:
         id: "deployd-v1"
         alias: "deployd Microservice (POC)"
         type: "deployd"
+    2:
+        bootstrap: false
+        id: "artifactd-v1"
+        alias: "artifactd Microservice (POC)"
+        type: "artifactd"

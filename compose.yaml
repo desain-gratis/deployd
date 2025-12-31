@@ -9,12 +9,13 @@ services:
       TZ: Asia/Jakarta
       DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
     ports:
-      - "9401:9500"
+      - "9401:9600"
     volumes:
       - ./config/deployd:/etc/deployd
       - ./config/deployd/raft/config-1.yaml:/etc/dragonboat.yaml
       - ./tmp/data/data-1:/data
       - ./tmp/dbus:/dbus
+      - ./www:/var/www
     depends_on:
       - clickhouse-deployd1
       - mock-systemd
@@ -31,12 +32,13 @@ services:
       TZ: Asia/Jakarta
       DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
     ports:
-      - "9402:9500"
+      - "9402:9600"
     volumes:
       - ./config/deployd:/etc/deployd
       - ./config/deployd/raft/config-2.yaml:/etc/dragonboat.yaml
       - ./tmp/data/data-2:/data
       - ./tmp/dbus:/dbus
+      - ./www:/var/www
     depends_on:
       - clickhouse-deployd2
       - mock-systemd
@@ -53,12 +55,13 @@ services:
       TZ: Asia/Jakarta
       DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
     ports:
-      - "9403:9500"
+      - "9403:9600"
     volumes:
       - ./config/deployd:/etc/deployd
       - ./config/deployd/raft/config-3.yaml:/etc/dragonboat.yaml
       - ./tmp/data/data-3:/data
       - ./tmp/dbus:/dbus
+      - ./www:/var/www
     depends_on:
       - clickhouse-deployd3
       - mock-systemd
