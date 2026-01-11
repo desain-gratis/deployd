@@ -14,7 +14,7 @@ import (
 
 const appName = "artifactd"
 
-var _ raft.Application = &app{}
+// var _ raft.Application = &app{}
 
 type app struct {
 	state *state
@@ -35,7 +35,6 @@ func NewRaft() *app {
 
 // Init
 func (a *app) Init(ctx context.Context) error {
-
 	conn := raft_runner.GetClickhouseConnection(ctx)
 
 	err := conn.Exec(ctx, ddlCommit)
@@ -144,7 +143,7 @@ func (a *app) Lookup(ctx context.Context, key interface{}) (interface{}, error) 
 func (a *app) registerArtifact(ctx context.Context, data *Artifact) raft.OnAfterApply {
 	conn := raft_runner.GetClickhouseConnection(ctx)
 
-	nsKey := Namespace{Namespace: data.Namespace, Name: data.Name}
+	nsKey := Namespace{Namespace: data.Ns, Name: data.Name}
 	_, ok := a.state.Index[nsKey]
 	if !ok {
 		var nidx uint64

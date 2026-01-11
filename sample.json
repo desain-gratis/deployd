@@ -1,5 +1,6 @@
 {
     "namespace": "desain-gratis",
+    "repository_id": "artifactd",
     "name": "hello",
     "commit_id": "a324adf2e",
     "branch": "dev",

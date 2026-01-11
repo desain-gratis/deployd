@@ -21,8 +21,10 @@ import (
 	mycontent_base "github.com/desain-gratis/common/delivery/mycontent-api/mycontent/base"
 	blob_s3 "github.com/desain-gratis/common/delivery/mycontent-api/storage/blob/s3"
 	content_clickhouse "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/clickhouse"
+	content_chraft "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/clickhouse-raft"
 	"github.com/desain-gratis/deploy/internal/src/artifactd"
 	"github.com/desain-gratis/deploy/internal/src/systemd"
+	"github.com/desain-gratis/deploy/src/entity"
 )
 
 func init() {
@@ -80,9 +82,11 @@ func enableArtifactUploadModule(_ context.Context, router *httprouter.Router) {
 
 	baseURL := config.GetString("http.public.fqdn")
 
-	// storage for linux amd64 build artifact
-	linuxAmd64Archive := content_clickhouse.New(conn, "linux_amd64", 0)
-	linuxAmd64ArchiveBlob, err := blob_s3.New(
+	repository := content_clickhouse.New(conn, "repository", 0)
+	buildRepository := content_clickhouse.New(conn, "build", 1)
+	buildArtifactRepository := content_clickhouse.New(conn, "build_artifact", 2)
+
+	buildArtifactBlob, err := blob_s3.New(
 		config.GetString("storage.s3.blob.endpoint"),
 		config.GetString("storage.s3.blob.key_id"),
 		config.GetString("storage.s3.blob.key_secret"),
@@ -94,40 +98,71 @@ func enableArtifactUploadModule(_ context.Context, router *httprouter.Router) {
 		log.Fatal().Msgf("failure to create blob storage client: %v", err)
 	}
 
-	linuxAmd64Handler := mycontentapi.NewAttachment(
+	repositoryHandler := mycontentapi.New(
+		mycontent_base.New[*entity.Repository](repository, 0),
+		baseURL+"/repository",
+		nil,
+	)
+
+	_ = mycontentapi.New(
+		mycontent_base.New[*entity.Build](buildRepository, 1),
+		baseURL+"/build",
+		[]string{"repository"},
+	)
+
+	buildArtifactHandler := mycontentapi.NewAttachment(
 		mycontent_base.NewAttachment(
-			linuxAmd64Archive,
+			buildArtifactRepository,
 			2,
-			linuxAmd64ArchiveBlob,
+			buildArtifactBlob,
 			false,               // hide the s3 URL
 			"assets/user/image", // the location in the s3 compatible bucket
 		),
-		baseURL+"/org/user/thumbnail",
+		baseURL+"/build/artifact",
 		[]string{},
 		"",
 	)
 
-	// <os>/<arch>
-	router.GET("/artifactd/linux/amd64", linuxAmd64Handler.Get)
-	router.POST("/artifactd/linux/amd64", linuxAmd64Handler.Upload)
-	router.DELETE("/artifactd/linux/amd64", linuxAmd64Handler.Delete)
+	router.GET("/artifactd/repository", repositoryHandler.Get)
+	router.POST("/artifactd/repository", repositoryHandler.Post)
+	router.DELETE("/artifactd/repository", repositoryHandler.Delete)
+
+	router.GET("/artifactd/build/artifact", buildArtifactHandler.Get)
+	router.POST("/artifactd/build/artifact", buildArtifactHandler.Upload)
+	router.DELETE("/artifactd/build/artifact", buildArtifactHandler.Delete)
 }
 
 // enableArtifactDiscoveryModule enables upload artifact discovery / metadata query
 func enableArtifactDiscoveryModule(_ context.Context, router *httprouter.Router) {
-	raft_runner.ForEachReplica[any]("artifactd", func(ctx context.Context) error {
-		outbox := notifier_impl.NewStandardTopic()
+	// conn, _ := config.getClickhouseConn("content")
 
-		raftHttpHandler := artifactd.NewHttpRaftHandler(ctx, outbox)
+	// metaRepo := content_clickhouse.New(conn, "linux_amd64", 0)
 
-		router.POST("/artifactd/register", raftHttpHandler.RegisterArtifact)
-		router.GET("/artifactd/discover", raftHttpHandler.DiscoverArtifact)
-		router.GET("/artifactd/ws", raftHttpHandler.StreamAll)
+	// metaHandler := mycontentapi.New(mycontent_base.New[*artifactd.Artifact](metaRepo, 0), "", nil)
 
-		sapp := artifactd.NewRaft()
+	ctx, err := raft_runner.RunReplica[any](
+		"artifactd-v1",
+		content_chraft.New(nil,
+			content_chraft.TableConfig{
+				Name: "artifactd_build", RefSize: 1,
+			},
+		),
+	)
+	if err != nil {
+		log.Panic().Msgf("failed to run artifactd raft: %v", err)
+	}
 
-		return raft_runner.Run(ctx, sapp)
-	})
+	baseURL := ""
+	buildHandler := mycontentapi.NewFromStorage[*artifactd.Artifact](
+		baseURL+"/artifactd/build",
+		[]string{"repository"},
+		content_chraft.NewStorageClient(ctx, "artifactd_build"),
+		1,
+	)
+
+	router.POST("/artifactd/build", buildHandler.Post)
+	router.GET("/artifactd/build", buildHandler.Get)
+	router.DELETE("/artifactd/build", buildHandler.Delete)
 }
 
 // TODO: refactor for multiple http server
