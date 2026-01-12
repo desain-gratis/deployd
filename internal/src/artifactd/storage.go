@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/desain-gratis/common/delivery/mycontent-api/mycontent"
+	"github.com/desain-gratis/common/types/entity"
 )
 
 var _ mycontent.Data = &Artifact{}
@@ -24,6 +25,7 @@ type Artifact struct {
 	RepositoryID string          `json:"repository_id"`
 	URLx         string          `json:"url"`
 	OsArch       []string        `json:"os_arch" ch:"os_arch"`
+	Archive      []*entity.File  `json:"archive"`
 }
 
 func (a *Artifact) CreatedTime() time.Time {

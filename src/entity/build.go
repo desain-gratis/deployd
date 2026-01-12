@@ -10,8 +10,7 @@ import (
 var _ mycontent.Data = &Build{}
 
 type Build struct {
-	IDx         uint32          `json:"id" ch:"id"`
-	UID         string          `json:"uid"`
+	Id          string          `json:"id"`
 	Ns          string          `json:"namespace" ch:"namespace"`
 	Name        string          `json:"name" ch:"name"`
 	CommitID    string          `json:"commit_id" ch:"commit_id"`
@@ -30,7 +29,7 @@ func (b *Build) CreatedTime() time.Time {
 }
 
 func (b *Build) ID() string {
-	return b.UID
+	return b.Id
 }
 
 func (b *Build) Namespace() string {
@@ -55,7 +54,7 @@ func (b *Build) WithCreatedTime(t time.Time) mycontent.Data {
 }
 
 func (b *Build) WithID(id string) mycontent.Data {
-	b.UID = id
+	b.Id = id
 	return b
 }
 
