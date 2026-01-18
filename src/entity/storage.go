@@ -11,7 +11,6 @@ import (
 var _ mycontent.Data = &Artifact{}
 
 type Artifact struct {
-	IDx          uint32          `json:"id" ch:"id"`
 	UID          string          `json:"uid"`
 	Ns           string          `json:"namespace" ch:"namespace"`
 	Name         string          `json:"name" ch:"name"`

@@ -8,7 +8,7 @@ require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.42.0
 	github.com/coder/websocket v1.8.14
 	github.com/coreos/go-systemd/v22 v22.6.0
-	github.com/desain-gratis/common v0.0.0-00010101000000-000000000000
+	github.com/desain-gratis/common v0.0.1
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/lni/dragonboat/v4 v4.0.0-20250723143628-076c7f6497dc
 	github.com/rs/zerolog v1.34.0
