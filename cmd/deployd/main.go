@@ -21,8 +21,8 @@ import (
 	mycontent_base "github.com/desain-gratis/common/delivery/mycontent-api/mycontent/base"
 	blob_s3 "github.com/desain-gratis/common/delivery/mycontent-api/storage/blob/s3"
 	content_chraft "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/clickhouse-raft"
-	"github.com/desain-gratis/deployd/internal/src/artifactd"
 	"github.com/desain-gratis/deployd/internal/src/systemd"
+	"github.com/desain-gratis/deployd/src/entity"
 )
 
 func init() {
@@ -98,14 +98,14 @@ func enableArtifactdModule(_ context.Context, router *httprouter.Router) {
 		log.Fatal().Msgf("failure to create blob storage client: %v", err)
 	}
 
-	repositoryHandler := mycontentapi.NewFromStorage[*artifactd.Artifact](
+	repositoryHandler := mycontentapi.NewFromStorage[*entity.Artifact](
 		baseURL+"/artifactd/repository",
 		nil,
 		content_chraft.NewStorageClient(ctx, "artifactd_repository"),
 		0,
 	)
 
-	buildHandler := mycontentapi.NewFromStorage[*artifactd.Artifact](
+	buildHandler := mycontentapi.NewFromStorage[*entity.Artifact](
 		baseURL+"/artifactd/build",
 		[]string{"repository"},
 		content_chraft.NewStorageClient(ctx, "artifactd_build"),

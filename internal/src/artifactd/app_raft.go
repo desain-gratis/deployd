@@ -9,6 +9,7 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/desain-gratis/common/lib/raft"
 	raft_runner "github.com/desain-gratis/common/lib/raft/runner"
+	"github.com/desain-gratis/deployd/src/entity"
 	"github.com/rs/zerolog/log"
 )
 
@@ -83,7 +84,7 @@ func (a *app) OnUpdate(ctx context.Context, e raft.Entry) raft.OnAfterApply {
 
 	switch cmd.Command {
 	case "register-artifact":
-		data, err := parseJsonAs[Artifact](cmd.Data)
+		data, err := parseJsonAs[entity.Artifact](cmd.Data)
 		if err != nil {
 			return responsef("invalid register artifact input: %v", cmd)
 		}
@@ -118,14 +119,14 @@ func (a *app) Lookup(ctx context.Context, key interface{}) (interface{}, error) 
 		return nil, err
 	}
 
-	out := make(chan *Artifact)
+	out := make(chan *entity.Artifact)
 
 	go func() {
 		defer close(out)
 		defer rows.Close()
 
 		for rows.Next() {
-			var artifact Artifact
+			var artifact entity.Artifact
 			// namespace, name, commit_id, branch, tag, actor, data, created_at
 			err := rows.ScanStruct(&artifact)
 			if err != nil {
@@ -137,10 +138,10 @@ func (a *app) Lookup(ctx context.Context, key interface{}) (interface{}, error) 
 		}
 	}()
 
-	return (<-chan *Artifact)(out), nil
+	return (<-chan *entity.Artifact)(out), nil
 }
 
-func (a *app) registerArtifact(ctx context.Context, data *Artifact) raft.OnAfterApply {
+func (a *app) registerArtifact(ctx context.Context, data *entity.Artifact) raft.OnAfterApply {
 	conn := raft_runner.GetClickhouseConnection(ctx)
 
 	nsKey := Namespace{Namespace: data.Ns, Name: data.Name}

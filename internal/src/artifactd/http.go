@@ -13,6 +13,7 @@ import (
 	"github.com/lni/dragonboat/v4/client"
 
 	raft_runner "github.com/desain-gratis/common/lib/raft/runner"
+	"github.com/desain-gratis/deployd/src/entity"
 )
 
 type httpHandler struct {
@@ -67,7 +68,7 @@ func (h *httpHandler) RegisterArtifact(w http.ResponseWriter, r *http.Request, p
 	}
 
 	// validate etc.
-	var req Artifact
+	var req entity.Artifact
 	err = json.Unmarshal(payload, &req)
 	if err != nil {
 		fmt.Fprintf(w, "error: %v", err)
@@ -112,7 +113,7 @@ func (h *httpHandler) DiscoverArtifact(w http.ResponseWriter, r *http.Request, p
 		return
 	}
 
-	stream, ok := result.(<-chan *Artifact)
+	stream, ok := result.(<-chan *entity.Artifact)
 	if !ok {
 		fmt.Fprintf(w, "error: not expected data %t", result) // todo json
 		return

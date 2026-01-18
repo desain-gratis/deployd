@@ -1,4 +1,4 @@
-package artifactd
+package entity
 
 import (
 	"encoding/json"
