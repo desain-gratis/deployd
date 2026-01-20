@@ -1,12 +1,16 @@
-# This workflow will build a golang project
-
-name: Go
+name: Build & Deploy Go App
 
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Hello"
+        required: true
+        default: "staging"
 
 permissions:
   contents: write
@@ -32,107 +36,49 @@ jobs:
       - name: Test
         run: go test -v ./...
 
-      - name: Build deployd
+      - name: Build deployd and copy necessary files
         run: |
           mkdir -p dist
-          GOOS=linux GOARCH=amd64 go build -o dist/myapp -v ./cmd/deployd/*.go
+          GOOS=linux GOARCH=amd64 go build -o dist/deployd -v ./cmd/deployd/*.go
+          cp ./config/*.yml dist
 
-      - name: Upload artifact
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: myapp-linux-amd64
-          path: dist/myapp
-          retention-days: 7
+          name: deployd-archive
+          path: dist/
+          if-no-files-found: error
 
-  draft-release:
-    needs: build
+  deploy:
+    needs: [build]     # <<< ensures job waits for build
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-
-    permissions:
-      contents: write
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
-          name: myapp-linux-amd64
-          path: release
+          name: deployd-archive
+          path: deploy-artifact
 
-      # ------------------------------------------
-      # AUTO-INCREMENT SEMVER TAG
-      # ------------------------------------------
-      - name: Determine next semver version
-        id: semver
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Get latest NON-DRAFT release tag
-          latest=$(gh release list --limit 20 --json tagName,isDraft \
-            --jq '.[] | select(.isDraft==false) | .tagName' | head -n1)
+      - name: Show downloaded files (debug)
+        run: ls -R deploy-artifact
 
-          if [ -z "$latest" ]; then
-            next="v0.1.0"
-          else
-            ver=${latest#v}
-            IFS='.' read -r M m p <<< "$ver"
-            next="v$M.$m.$((p+1))"
-          fi
-
-          echo "next_tag=$next" >> $GITHUB_OUTPUT
-          echo "Next version = $next"
-
-      # ------------------------------------------
-      # DELETE EXISTING DRAFT WITH SAME TAG
-      # ------------------------------------------
-      - name: Delete existing draft (if present)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          tag="${{ steps.semver.outputs.next_tag }}"
-
-          # Check if a draft release with this tag exists
-          draft_id=$(gh release view "$tag" --json isDraft --jq '.isDraft' 2>/dev/null || echo "false")
-
-          if [ "$draft_id" = "true" ]; then
-            echo "Found existing draft release for $tag — deleting it."
-            gh release delete "$tag" --yes
-          else
-            echo "No existing draft to delete."
-          fi
-
-      # ------------------------------------------
-      # GENERATE CHANGELOG
-      # ------------------------------------------
-      - name: Generate changelog
-        id: changelog
-        run: |
-          last_tag=$(git tag --sort=-creatordate | head -n 1)
-
-          if [ -z "$last_tag" ]; then
-            echo "log=Initial release" >> $GITHUB_OUTPUT
-          else
-            log=$(git log "$last_tag"..HEAD --pretty=format:"- %s (%h)")
-            echo "log<<EOF" >> $GITHUB_OUTPUT
-            echo "$log" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          fi
-
-      # ------------------------------------------
-      # CREATE NEW DRAFT RELEASE (SOFTPROPS)
-      # ------------------------------------------
-      - name: Create draft release
-        uses: softprops/action-gh-release@v2
+      - name: Tailscale
+        uses: tailscale/github-action@v4
         with:
-          draft: true
-          tag_name: ${{ steps.semver.outputs.next_tag }}
-          name: ${{ steps.semver.outputs.next_tag }}
-          body: ${{ steps.changelog.outputs.log }}
-          files: release/myapp
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:desain-gratis-ci
+
+      - name: Debug Tailscale
+        run: |
+          tailscale status
+          tailscale ping mb1
+
+      - name: Upload artifactd & metadata to private deployd repository
+        uses: desain-gratis/deployd-gh-action@v1
+        with:
+          url: http://mb1:9401
+          namespace: desain-gratis
+          name: user-profile
+          archive: dist
