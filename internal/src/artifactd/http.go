@@ -95,7 +95,7 @@ func (h *httpHandler) RegisterArtifact(w http.ResponseWriter, r *http.Request, p
 		return
 	}
 
-	fmt.Fprintf(w, string(result.Data))
+	fmt.Fprintf(w, "%v", string(result.Data))
 }
 
 func (h *httpHandler) DiscoverArtifact(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
