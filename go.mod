@@ -2,7 +2,7 @@ module github.com/desain-gratis/deployd
 
 go 1.24.0
 
-replace github.com/desain-gratis/common => ../common
+// replace github.com/desain-gratis/common => ../common
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.42.0
