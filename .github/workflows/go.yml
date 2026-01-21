@@ -78,7 +78,7 @@ jobs:
       - name: Upload artifactd & metadata to private deployd repository
         uses: desain-gratis/deployd-gh-action@v1
         with:
-          url: http://mb1:9401
+          url: http://mb1:9600
           namespace: desain-gratis
           name: user-profile
           archive: dist
