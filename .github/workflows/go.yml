@@ -40,7 +40,7 @@ jobs:
         run: |
           mkdir -p dist
           GOOS=linux GOARCH=amd64 go build -o dist/deployd -v ./cmd/deployd/*.go
-          cp ./config/*.yml dist
+          cp ./config/deployd/*.yml dist
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
