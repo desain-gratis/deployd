@@ -81,4 +81,4 @@ jobs:
           url: http://mb1:9600
           namespace: desain-gratis
           name: user-profile
-          archive: dist
+          archive: deploy-artifact
