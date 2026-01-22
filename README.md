@@ -1,3 +1,3 @@
 # Deployd
 
-Deploy to your own cluster
+deploy golang service as ubuntu systemd service
