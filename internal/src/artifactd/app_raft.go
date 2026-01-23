@@ -84,7 +84,7 @@ func (a *app) OnUpdate(ctx context.Context, e raft.Entry) raft.OnAfterApply {
 
 	switch cmd.Command {
 	case "register-artifact":
-		data, err := parseJsonAs[entity.Artifact](cmd.Data)
+		data, err := parseJsonAs[entity.BuildArtifact](cmd.Data)
 		if err != nil {
 			return responsef("invalid register artifact input: %v", cmd)
 		}
@@ -119,14 +119,14 @@ func (a *app) Lookup(ctx context.Context, key interface{}) (interface{}, error) 
 		return nil, err
 	}
 
-	out := make(chan *entity.Artifact)
+	out := make(chan *entity.BuildArtifact)
 
 	go func() {
 		defer close(out)
 		defer rows.Close()
 
 		for rows.Next() {
-			var artifact entity.Artifact
+			var artifact entity.BuildArtifact
 			// namespace, name, commit_id, branch, tag, actor, data, created_at
 			err := rows.ScanStruct(&artifact)
 			if err != nil {
@@ -138,10 +138,10 @@ func (a *app) Lookup(ctx context.Context, key interface{}) (interface{}, error) 
 		}
 	}()
 
-	return (<-chan *entity.Artifact)(out), nil
+	return (<-chan *entity.BuildArtifact)(out), nil
 }
 
-func (a *app) registerArtifact(ctx context.Context, data *entity.Artifact) raft.OnAfterApply {
+func (a *app) registerArtifact(ctx context.Context, data *entity.BuildArtifact) raft.OnAfterApply {
 	conn := raft_runner.GetClickhouseConnection(ctx)
 
 	nsKey := Namespace{Namespace: data.Ns, Name: data.Name}

@@ -8,10 +8,10 @@ import (
 	"github.com/desain-gratis/common/types/entity"
 )
 
-var _ mycontent.Data = &Artifact{}
+var _ mycontent.Data = &BuildArtifact{}
 
-type Artifact struct {
-	UID          string          `json:"uid"`
+type BuildArtifact struct {
+	Id           string          `json:"id,omitempty"`
 	Ns           string          `json:"namespace" ch:"namespace"`
 	Name         string          `json:"name" ch:"name"`
 	CommitID     string          `json:"commit_id" ch:"commit_id"`
@@ -27,46 +27,46 @@ type Artifact struct {
 	Archive      []*entity.File  `json:"archive"`
 }
 
-func (a *Artifact) CreatedTime() time.Time {
+func (a *BuildArtifact) CreatedTime() time.Time {
 	return a.PublishedAt
 }
 
-func (a *Artifact) ID() string {
-	return a.UID
+func (a *BuildArtifact) ID() string {
+	return a.CommitID
 }
 
-func (a *Artifact) Namespace() string {
+func (a *BuildArtifact) Namespace() string {
 	return a.Ns
 }
 
-func (a *Artifact) RefIDs() []string {
+func (a *BuildArtifact) RefIDs() []string {
 	return []string{a.RepositoryID}
 }
 
-func (a *Artifact) URL() string {
+func (a *BuildArtifact) URL() string {
 	return a.URLx
 }
 
-func (a *Artifact) Validate() error {
+func (a *BuildArtifact) Validate() error {
 	return nil
 }
 
-func (a *Artifact) WithCreatedTime(t time.Time) mycontent.Data {
+func (a *BuildArtifact) WithCreatedTime(t time.Time) mycontent.Data {
 	a.PublishedAt = t
 	return a
 }
 
-func (a *Artifact) WithID(id string) mycontent.Data {
-	a.UID = id
+func (a *BuildArtifact) WithID(id string) mycontent.Data {
+	a.CommitID = id
 	return a
 }
 
-func (a *Artifact) WithNamespace(id string) mycontent.Data {
+func (a *BuildArtifact) WithNamespace(id string) mycontent.Data {
 	a.Ns = id
 	return a
 }
 
-func (a *Artifact) WithURL(url string) mycontent.Data {
+func (a *BuildArtifact) WithURL(url string) mycontent.Data {
 	a.URLx = url
 	return a
 }

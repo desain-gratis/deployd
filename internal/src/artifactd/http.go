@@ -68,7 +68,7 @@ func (h *httpHandler) RegisterArtifact(w http.ResponseWriter, r *http.Request, p
 	}
 
 	// validate etc.
-	var req entity.Artifact
+	var req entity.BuildArtifact
 	err = json.Unmarshal(payload, &req)
 	if err != nil {
 		fmt.Fprintf(w, "error: %v", err)
@@ -113,7 +113,7 @@ func (h *httpHandler) DiscoverArtifact(w http.ResponseWriter, r *http.Request, p
 		return
 	}
 
-	stream, ok := result.(<-chan *entity.Artifact)
+	stream, ok := result.(<-chan *entity.BuildArtifact)
 	if !ok {
 		fmt.Fprintf(w, "error: not expected data %t", result) // todo json
 		return

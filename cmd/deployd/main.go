@@ -98,14 +98,14 @@ func enableArtifactdModule(_ context.Context, router *httprouter.Router) {
 		log.Fatal().Msgf("failure to create blob storage client: %v", err)
 	}
 
-	repositoryHandler := mycontentapi.NewFromStorage[*entity.Artifact](
+	repositoryHandler := mycontentapi.NewFromStorage[*entity.BuildArtifact](
 		baseURL+"/artifactd/repository",
 		nil,
 		content_chraft.NewStorageClient(ctx, "artifactd_repository"),
 		0,
 	)
 
-	buildHandler := mycontentapi.NewFromStorage[*entity.Artifact](
+	buildHandler := mycontentapi.NewFromStorage[*entity.BuildArtifact](
 		baseURL+"/artifactd/build",
 		[]string{"repository"},
 		content_chraft.NewStorageClient(ctx, "artifactd_build"),
