@@ -68,6 +68,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/desain-gratis/common v0.0.2-0.20260122011010-a7b3b604ff28 h1:4NjlTLOfDcqqgiUba2QLw8ST3Dt/GDzOchLh5wdAUmM=
 github.com/desain-gratis/common v0.0.2-0.20260122011010-a7b3b604ff28/go.mod h1:k9gq1uOEuspdzt3gs9gpVZy7imHKhadgqKoY1+q0rT4=
+github.com/desain-gratis/common v0.0.2-0.20260126183319-8303b9e8ccac h1:K0M4x9RJIYTqGVUIRAkUtDfgGuZkDt3srqQtDUzn1nU=
+github.com/desain-gratis/common v0.0.2-0.20260126183319-8303b9e8ccac/go.mod h1:k9gq1uOEuspdzt3gs9gpVZy7imHKhadgqKoY1+q0rT4=
 github.com/dgraph-io/badger v1.6.0/go.mod h1:zwt7syl517jmP8s94KqSxTlM6IMsdhYy6psNgSztDR4=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2/go.mod h1:SqUrOPUnsFjfmXRMNPybcSiG0BgUW2AuFH8PAnS2iTw=
