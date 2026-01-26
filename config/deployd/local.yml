@@ -1,3 +1,6 @@
+host:
+  name: "internal-hostname"
+
 http:
   public:
     address: ":9600"

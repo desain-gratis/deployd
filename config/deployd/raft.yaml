@@ -1,0 +1,9 @@
+replica:
+    1:
+        id: "deployd-v1"
+        alias: "deployd Microservice (POC)"
+        type: "deployd"
+    2:
+        id: "artifactd-v1"
+        alias: "artifactd Microservice (POC)"
+        type: "artifactd"

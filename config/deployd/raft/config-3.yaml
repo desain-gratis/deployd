@@ -21,3 +21,8 @@ replica:
         id: "artifactd-v1"
         alias: "artifactd Microservice (POC)"
         type: "artifactd"
+    3:
+        bootstrap: false
+        id: "secretd-v1"
+        alias: "secretd Microservice (POC)"
+        type: "secretd"

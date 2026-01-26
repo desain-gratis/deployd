@@ -11,7 +11,6 @@ import (
 var _ mycontent.Data = &BuildArtifact{}
 
 type BuildArtifact struct {
-	Id           string          `json:"id,omitempty"`
 	Ns           string          `json:"namespace" ch:"namespace"`
 	Name         string          `json:"name" ch:"name"`
 	CommitID     string          `json:"commit_id" ch:"commit_id"`

@@ -1,7 +1,7 @@
 http:
   public:
     address: ":9600"
-    fqdn: http://localhost:9401
+    fqdn: http://mb1
 
 ui:
   dir: "/var/www"
@@ -9,15 +9,15 @@ ui:
 storage:
   s3:
     blob:
-      endpoint: minio:9000
+      endpoint: d3580329dcd290336186304be108631f.r2.cloudflarestorage.com
       key_id: <secret>
       key_secret: <secret>
-      use_ssl: false
-      bucket_name: sewatenan-bucket
-      base_public_url: http://localhost:9000/sewatenan-bucket
+      use_ssl: true
+      bucket_name: artifactd-beta
+      base_public_url: https://mb1:9000/artifactd-beta
   clickhouse:
     content:
-      address: "clickhouse-content:9000"
+      address: "clickhouse-darurat:9000"
       username: <secret>
       password: <secret>
       database: default

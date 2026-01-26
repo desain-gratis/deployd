@@ -44,6 +44,9 @@ func main() {
 
 	enableSystemdModule(ctx, router)
 	enableArtifactdModule(ctx, router)
+	enableDeploydModule(ctx, router)
+	enableSecretdModule(ctx, router)
+
 	enableUI(ctx, router)
 
 	go startRouter(ctx, wg, router, config.GetString("http.public.address"))
@@ -57,7 +60,7 @@ func main() {
 	log.Info().Msgf("Bye bye")
 }
 
-func enableUI(ctx context.Context, router *httprouter.Router) {
+func enableUI(_ context.Context, router *httprouter.Router) {
 	router.ServeFiles("/ui/*filepath", http.Dir(config.GetString("ui.dir")))
 }
 
@@ -70,9 +73,74 @@ func enableSystemdModule(ctx context.Context, router *httprouter.Router) {
 	router.GET("/ws", httpIntegration.StreamUnit)
 }
 
-// enableArtifactDienableArtifactdModulescoveryModule enables upload artifact discovery / metadata query
-func enableArtifactdModule(_ context.Context, router *httprouter.Router) {
+func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
 	ctx, err := raft_runner.RunReplica[any](
+		ctx,
+		"secretd-v1",
+		content_chraft.New(nil,
+			content_chraft.TableConfig{Name: "secretd_value", RefSize: 1},
+		),
+	)
+	if err != nil {
+		log.Panic().Msgf("failed to run secretd raft: %v", err)
+	}
+
+	baseURL := ""
+
+	secretKVHandler := mycontentapi.NewFromStorage[*entity.ServiceDefinition](
+		baseURL+"/secretd/kv",
+		[]string{"service"}, // refers to deployd service definition
+		content_chraft.NewStorageClient(ctx, "secretd_kv"),
+		1,
+	)
+
+	router.POST("/secretd/kv", secretKVHandler.Post)
+	router.GET("/secretd/kv", secretKVHandler.Get)
+	router.DELETE("/secretd/kv", secretKVHandler.Delete)
+}
+
+func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
+	ctx, err := raft_runner.RunReplica[any](
+		ctx,
+		"deployd-v1",
+		content_chraft.New(nil,
+			content_chraft.TableConfig{Name: "deployd_service", RefSize: 0},
+			content_chraft.TableConfig{Name: "deployd_raft", RefSize: 1},
+		),
+	)
+	if err != nil {
+		log.Panic().Msgf("failed to run deployd raft: %v", err)
+	}
+
+	baseURL := ""
+
+	serviceDefinitionHandler := mycontentapi.NewFromStorage[*entity.ServiceDefinition](
+		baseURL+"/deployd/service",
+		nil,
+		content_chraft.NewStorageClient(ctx, "deployd_service"),
+		0,
+	)
+
+	raftConfigHandler := mycontentapi.NewFromStorage[*entity.RaftConfiguration](
+		baseURL+"/deployd/raft",
+		nil,
+		content_chraft.NewStorageClient(ctx, "deployd_raft"),
+		0,
+	)
+
+	router.POST("/deployd/service", serviceDefinitionHandler.Post)
+	router.GET("/deployd/service", serviceDefinitionHandler.Get)
+	router.DELETE("/deployd/service", serviceDefinitionHandler.Delete)
+
+	router.POST("/deployd/raft", raftConfigHandler.Post)
+	router.GET("/deployd/raft", raftConfigHandler.Get)
+	router.DELETE("/deployd/raft", raftConfigHandler.Delete)
+}
+
+// enableArtifactDienableArtifactdModulescoveryModule enables upload artifact discovery / metadata query
+func enableArtifactdModule(ctx context.Context, router *httprouter.Router) {
+	ctx, err := raft_runner.RunReplica[any](
+		ctx,
 		"artifactd-v1",
 		content_chraft.New(nil,
 			content_chraft.TableConfig{Name: "artifactd_repository", RefSize: 0},
