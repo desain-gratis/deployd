@@ -1,13 +1,14 @@
 services:
   deployd1:
     image: deployd:latest
-    # restart: on-failure
-    env_file: ".env"
+    restart: on-failure
+    # env_file: ".env"
     environment:
       CONFIG: /etc/deployd/local.yml
       DC: "/etc/dragonboat.yaml"
       TZ: Asia/Jakarta
       DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
+      DEPLOYD_SECRET: /etc/deployd/local.yml.secret
     ports:
       - "9401:9600"
     volumes:
@@ -25,12 +26,13 @@ services:
   deployd2:
     image: deployd:latest
     restart: on-failure
-    env_file: ".env"
+    # env_file: ".env"
     environment:
       CONFIG: /etc/deployd/local.yml
       DC: "/etc/dragonboat.yaml"
       TZ: Asia/Jakarta
       DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
+      DEPLOYD_SECRET: /etc/deployd/local.yml.secret
     ports:
       - "9402:9600"
     volumes:
@@ -48,12 +50,13 @@ services:
   deployd3:
     image: deployd:latest
     restart: on-failure
-    env_file: ".env"
+    # env_file: ".env"
     environment:
       CONFIG: /etc/deployd/local.yml
       DC: "/etc/dragonboat.yaml"
       TZ: Asia/Jakarta
       DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
+      DEPLOYD_SECRET: /etc/deployd/local.yml.secret
     ports:
       - "9403:9600"
     volumes:

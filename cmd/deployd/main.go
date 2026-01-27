@@ -10,9 +10,6 @@ import (
 	"sync"
 	"time"
 
-	notifier_impl "github.com/desain-gratis/common/lib/notifier/impl"
-	raft_replica "github.com/desain-gratis/common/lib/raft/replica"
-	raft_runner "github.com/desain-gratis/common/lib/raft/runner"
 	"github.com/julienschmidt/httprouter"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -21,7 +18,11 @@ import (
 	mycontent_base "github.com/desain-gratis/common/delivery/mycontent-api/mycontent/base"
 	blob_s3 "github.com/desain-gratis/common/delivery/mycontent-api/storage/blob/s3"
 	content_chraft "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/clickhouse-raft"
+	notifier_impl "github.com/desain-gratis/common/lib/notifier/impl"
+	raft_runner "github.com/desain-gratis/common/lib/raft/runner"
+
 	"github.com/desain-gratis/deployd/internal/src/systemd"
+	"github.com/desain-gratis/deployd/src/deployd"
 	"github.com/desain-gratis/deployd/src/entity"
 )
 
@@ -34,7 +35,14 @@ func main() {
 
 	initConfig()
 
-	err := raft_replica.Init()
+	err := deployd.InjectSecretToViper(config.Viper)
+	if err != nil && !errors.Is(err, deployd.ErrNotConfigured) {
+		log.Panic().Msgf("failed to merge config with secret: %v", err)
+	} else if err != nil {
+		log.Warn().Msgf("not in deployd environment")
+	}
+
+	err = deployd.InitializeRaft()
 	if err != nil {
 		log.Panic().Msgf("failed to init raft: %v", err)
 	}
