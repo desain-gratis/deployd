@@ -77,7 +77,7 @@ jobs:
           tailscale ping mb1
 
       - name: Upload artifactd & metadata to private deployd repository
-        uses: desain-gratis/deployd-gh-action@latest
+        uses: desain-gratis/deployd-gh-action@v1
         with:
           url: http://mb1:9600
           namespace: desain-gratis
