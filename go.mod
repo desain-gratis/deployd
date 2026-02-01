@@ -4,11 +4,14 @@ go 1.24.0
 
 replace github.com/desain-gratis/common => ../common
 
+// asked chatgpt
+replace git.apache.org/thrift.git => github.com/apache/thrift v0.22.0
+
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.42.0
 	github.com/coder/websocket v1.8.14
 	github.com/coreos/go-systemd/v22 v22.6.0
-	github.com/desain-gratis/common v0.0.2-0.20260126183319-8303b9e8ccac
+	github.com/desain-gratis/common v0.0.0-00010101000000-000000000000
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/lni/dragonboat/v4 v4.0.0-20250723143628-076c7f6497dc
 	github.com/rs/zerolog v1.34.0
@@ -27,6 +30,7 @@ require (
 	github.com/cockroachdb/logtags v0.0.0-20211118104740-dabe8e521a4f // indirect
 	github.com/cockroachdb/pebble v0.0.0-20221207173255-0f086d933dac // indirect
 	github.com/cockroachdb/redact v1.1.3 // indirect
+	github.com/disintegration/imaging v1.6.2 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/getsentry/sentry-go v0.12.0 // indirect
@@ -83,6 +87,7 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
 	golang.org/x/exp v0.0.0-20200513190911-00229845015e // indirect
+	golang.org/x/image v0.18.0 // indirect
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.32.0 // indirect

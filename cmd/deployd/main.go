@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"time"
 
@@ -42,7 +43,7 @@ func main() {
 		log.Warn().Msgf("not in deployd environment")
 	}
 
-	err = deployd.InitializeRaft()
+	err = deployd.InitializeRaft(nil)
 	if err != nil {
 		log.Panic().Msgf("failed to init raft: %v", err)
 	}
@@ -50,12 +51,16 @@ func main() {
 	wg := new(sync.WaitGroup)
 	router := httprouter.New()
 
-	enableSystemdModule(ctx, router)
+	// enableSystemdModule(ctx, router)
 	enableArtifactdModule(ctx, router)
+
 	enableDeploydModule(ctx, router)
+
 	enableSecretdModule(ctx, router)
 
 	enableUI(ctx, router)
+
+	// update host config first
 
 	go startRouter(ctx, wg, router, config.GetString("http.public.address"))
 
@@ -107,13 +112,32 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
 	router.DELETE("/secretd/kv", secretKVHandler.Delete)
 }
 
+func getReplicaID() uint64 {
+	replicaID, err := strconv.ParseUint(os.Getenv("DEPLOYD_REPLICA_ID"), 10, 64)
+	if err != nil {
+		log.Fatal().Msgf("invalid DEPLOYD_REPLICA_ID env value: %v", os.Getenv("DEPLOYD_REPLICA_ID"))
+	}
+	return replicaID
+}
+
+func mustEnv(env string) string {
+	value := os.Getenv(env)
+	if value == "" {
+		log.Fatal().Msgf("invalid '%v' env value: %v", env, value)
+	}
+
+	return value
+}
+
 func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 	ctx, err := raft_runner.RunReplica[any](
 		ctx,
 		"deployd-v1",
 		content_chraft.New(nil,
+			content_chraft.TableConfig{Name: "deployd_host", RefSize: 0},
 			content_chraft.TableConfig{Name: "deployd_service", RefSize: 0},
-			content_chraft.TableConfig{Name: "deployd_raft", RefSize: 1},
+			content_chraft.TableConfig{Name: "deployd_raft_host", RefSize: 1},
+			content_chraft.TableConfig{Name: "deployd_raft_replica", RefSize: 1},
 		),
 	)
 	if err != nil {
@@ -122,6 +146,15 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 
 	baseURL := ""
 
+	// config storage
+	hostConfigStore := content_chraft.NewStorageClient(ctx, "deployd_host")
+	hostConfigUsecase := mycontent_base.New[*entity.Host](hostConfigStore, 0)
+	hostConfigHandler := mycontentapi.New(
+		hostConfigUsecase,
+		baseURL+"/deployd/host",
+		nil,
+	)
+
 	serviceDefinitionHandler := mycontentapi.NewFromStorage[*entity.ServiceDefinition](
 		baseURL+"/deployd/service",
 		nil,
@@ -129,20 +162,60 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 		0,
 	)
 
-	raftConfigHandler := mycontentapi.NewFromStorage[*entity.RaftConfiguration](
-		baseURL+"/deployd/raft",
-		nil,
-		content_chraft.NewStorageClient(ctx, "deployd_raft"),
-		0,
+	raftHostHandler := mycontentapi.NewFromStorage[*entity.RaftHost](
+		baseURL+"/deployd/raft/host",
+		[]string{"service"},
+		content_chraft.NewStorageClient(ctx, "deployd_raft_host"),
+		1,
 	)
 
+	raftReplicaHandler := mycontentapi.NewFromStorage[*entity.RaftReplica](
+		baseURL+"/deployd/raft/replica",
+		[]string{"service"},
+		content_chraft.NewStorageClient(ctx, "deployd_raft_replica"),
+		1,
+	)
+
+	// Service registry
 	router.POST("/deployd/service", serviceDefinitionHandler.Post)
 	router.GET("/deployd/service", serviceDefinitionHandler.Get)
 	router.DELETE("/deployd/service", serviceDefinitionHandler.Delete)
 
-	router.POST("/deployd/raft", raftConfigHandler.Post)
-	router.GET("/deployd/raft", raftConfigHandler.Get)
-	router.DELETE("/deployd/raft", raftConfigHandler.Delete)
+	// Deployd raft host specific configuration
+	router.POST("/deployd/host", hostConfigHandler.Post)
+	router.GET("/deployd/host", hostConfigHandler.Get)
+	router.DELETE("/deployd/host", hostConfigHandler.Delete)
+
+	// Replica registry for each service.
+	// We get the source of truth from application that use deployd library.
+	router.POST("/deployd/raft/replica", raftReplicaHandler.Post)
+	router.GET("/deployd/raft/replica", raftReplicaHandler.Get)
+	router.DELETE("/deployd/raft/replica", raftReplicaHandler.Delete)
+
+	// Deployd raft host specific configuration
+	router.POST("/deployd/raft/host", raftHostHandler.Post)
+	router.GET("/deployd/raft/host", raftHostHandler.Get)
+	router.DELETE("/deployd/raft/host", raftHostHandler.Delete)
+
+	// Populate host config API with config from file
+	for {
+		_, err = hostConfigUsecase.Post(ctx, &entity.Host{
+			Ns:           "deployd",
+			Host:         mustEnv("DEPLOYD_HOSTNAME"),
+			OS:           mustEnv("DEPLOYD_OS"),
+			Architecture: mustEnv("DEPLOYD_ARCH"),
+			RaftConfig: entity.DeploydRaftConfig{
+				ReplicaID: getReplicaID(),
+			},
+			FQDN:        "com.deployd",
+			PublishedAt: time.Now(),
+		}, nil)
+		if !errors.Is(err, content_chraft.ErrNotReady) {
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+
 }
 
 // enableArtifactDienableArtifactdModulescoveryModule enables upload artifact discovery / metadata query
@@ -152,7 +225,7 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router) {
 		"artifactd-v1",
 		content_chraft.New(nil,
 			content_chraft.TableConfig{Name: "artifactd_repository", RefSize: 0},
-			content_chraft.TableConfig{Name: "artifactd_build", RefSize: 1},
+			content_chraft.TableConfig{Name: "artifactd_build", RefSize: 1, IncrementalID: true},
 			content_chraft.TableConfig{Name: "artifactd_archive", RefSize: 2},
 		),
 	)

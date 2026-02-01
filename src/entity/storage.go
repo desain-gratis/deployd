@@ -8,10 +8,11 @@ import (
 	"github.com/desain-gratis/common/types/entity"
 )
 
-var _ mycontent.Data = &BuildArtifact{}
+var _ mycontent.VersionedData = &BuildArtifact{}
 
 type BuildArtifact struct {
 	Ns           string          `json:"namespace" ch:"namespace"`
+	Id           string          `json:"id"`
 	Name         string          `json:"name" ch:"name"`
 	CommitID     string          `json:"commit_id" ch:"commit_id"`
 	Branch       string          `json:"branch,omitempty" ch:"branch"`
@@ -31,7 +32,7 @@ func (a *BuildArtifact) CreatedTime() time.Time {
 }
 
 func (a *BuildArtifact) ID() string {
-	return a.CommitID
+	return a.Id
 }
 
 func (a *BuildArtifact) Namespace() string {
@@ -56,7 +57,7 @@ func (a *BuildArtifact) WithCreatedTime(t time.Time) mycontent.Data {
 }
 
 func (a *BuildArtifact) WithID(id string) mycontent.Data {
-	a.CommitID = id
+	a.Id = id
 	return a
 }
 
@@ -67,5 +68,9 @@ func (a *BuildArtifact) WithNamespace(id string) mycontent.Data {
 
 func (a *BuildArtifact) WithURL(url string) mycontent.Data {
 	a.URLx = url
+	return a
+}
+
+func (a *BuildArtifact) WithEventID(id uint64) mycontent.VersionedData {
 	return a
 }

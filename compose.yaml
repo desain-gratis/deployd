@@ -4,11 +4,15 @@ services:
     restart: on-failure
     # env_file: ".env"
     environment:
-      CONFIG: /etc/deployd/local.yml
+      CONFIG: /etc/deployd/local-1.yml
       DC: "/etc/dragonboat.yaml"
       TZ: Asia/Jakarta
       DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
       DEPLOYD_SECRET: /etc/deployd/local.yml.secret
+      DEPLOYD_REPLICA_ID: 1
+      DEPLOYD_HOSTNAME: deployd1
+      DEPLOYD_OS: linux
+      DEPLOYD_ARCH: amd64
     ports:
       - "9401:9600"
     volumes:
@@ -28,11 +32,15 @@ services:
     restart: on-failure
     # env_file: ".env"
     environment:
-      CONFIG: /etc/deployd/local.yml
+      CONFIG: /etc/deployd/local-2.yml
       DC: "/etc/dragonboat.yaml"
       TZ: Asia/Jakarta
       DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
       DEPLOYD_SECRET: /etc/deployd/local.yml.secret
+      DEPLOYD_REPLICA_ID: 2
+      DEPLOYD_HOSTNAME: deployd2
+      DEPLOYD_OS: linux
+      DEPLOYD_ARCH: amd64
     ports:
       - "9402:9600"
     volumes:
@@ -52,11 +60,15 @@ services:
     restart: on-failure
     # env_file: ".env"
     environment:
-      CONFIG: /etc/deployd/local.yml
+      CONFIG: /etc/deployd/local-3.yml
       DC: "/etc/dragonboat.yaml"
       TZ: Asia/Jakarta
       DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
       DEPLOYD_SECRET: /etc/deployd/local.yml.secret
+      DEPLOYD_REPLICA_ID: 3
+      DEPLOYD_HOSTNAME: deployd3
+      DEPLOYD_OS: linux
+      DEPLOYD_ARCH: amd64
     ports:
       - "9403:9600"
     volumes:

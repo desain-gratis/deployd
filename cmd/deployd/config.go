@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -26,8 +25,8 @@ type appConfig struct {
 func initConfig() {
 	config.SetConfigType("yaml")
 
-	config.SetEnvPrefix("DEPLOYD")
-	config.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
+	// config.SetEnvPrefix("DEPLOYD")
+	// config.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
 	config.AutomaticEnv()
 
 	configFile := os.Getenv("CONFIG")
