@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Deployment History</title>
+<title>Build History</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
 <style>
@@ -22,39 +22,16 @@
   font-family:system-ui,-apple-system,Segoe UI,Roboto;
 }
 
-body {
-  margin:0;
-  background:var(--bg);
-  color:var(--text);
-}
+body { margin:0; background:var(--bg); color:var(--text); }
 
-header {
-  padding:14px 16px;
-  border-bottom:1px solid var(--border);
-}
+header { padding:14px 16px; border-bottom:1px solid var(--border); }
+h1 { margin:0; font-size:17px; }
+p { margin:4px 0 0; font-size:12px; color:var(--muted); }
 
-h1 {
-  margin:0;
-  font-size:17px;
-}
-
-p {
-  margin:4px 0 0;
-  font-size:12px;
-  color:var(--muted);
-}
-
-.container {
-  padding:12px 14px;
-  max-width:1400px;
-  margin:auto;
-}
+.container { padding:12px 14px; max-width:1400px; margin:auto; }
 
 .controls {
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px;
-  margin-bottom:10px;
+  display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;
 }
 
 input, select {
@@ -80,23 +57,11 @@ button {
 }
 
 @media (min-width: 640px) {
-  button {
-    flex:0 0 auto;
-    padding:7px 14px;
-  }
+  button { flex:0 0 auto; padding:7px 14px; }
 }
 
-.status {
-  font-size:12px;
-  color:var(--muted);
-  margin-bottom:6px;
-}
-
-.warn {
-  color:var(--warn);
-}
-
-/* ===== Desktop Table ===== */
+.status { font-size:12px; color:var(--muted); margin-bottom:6px; }
+.warn { color:var(--warn); }
 
 table {
   width:100%;
@@ -114,23 +79,12 @@ th, td {
   white-space:nowrap;
 }
 
-th {
-  text-align:left;
-  color:var(--muted);
-  font-weight:600;
-}
+th { text-align:left; color:var(--muted); font-weight:600; }
 
-tbody tr:hover {
-  background:#020617;
-}
+tbody tr:hover { background:#020617; }
 
-.mono {
-  font-family:ui-monospace,Menlo,monospace;
-}
-
-.commit {
-  color:var(--success);
-}
+.mono { font-family:ui-monospace,Menlo,monospace; }
+.commit { color:var(--success); }
 
 .tag {
   background:#082f49;
@@ -139,6 +93,7 @@ tbody tr:hover {
   border-radius:999px;
   font-size:11px;
   font-weight:600;
+  text-decoration:none;
 }
 
 td[data-label="ID"] {
@@ -149,13 +104,8 @@ td[data-label="ID"] {
 /* ===== Mobile Layout ===== */
 
 @media (max-width: 640px) {
-  table, thead {
-    display:none;
-  }
-
-  tbody, tr {
-    display:block;
-  }
+  table, thead { display:none; }
+  tbody, tr { display:block; }
 
   tr {
     background:var(--panel);
@@ -192,14 +142,13 @@ td[data-label="ID"] {
 
 <body>
 <header>
-  <h1>Deployment History</h1>
-  <p>Time-ordered · mobile-friendly · large-scale DevX</p>
+  <h1>Build History</h1>
+  <p>Artifact builds · mobile-friendly · large-scale DevX</p>
 </header>
 
 <div class="container">
   <div class="controls">
-    <input id="namespace" value="desain-gratis" placeholder="namespace">
-    <input id="name" value="hello" placeholder="name">
+    <input id="name" value="user-profile" placeholder="repository">
     <select id="actorFilter">
       <option value="">All actors</option>
     </select>
@@ -218,17 +167,18 @@ td[data-label="ID"] {
         <th>Time</th>
         <th>Actor</th>
         <th>Branch</th>
-        <th>Tag</th>
+        <th>Repository</th>
         <th>Commit</th>
         <th>Source</th>
         <th>OS / Arch</th>
+        <th>Download</th>
       </tr>
     </thead>
     <tbody id="tbody"></tbody>
   </table>
 
   <div id="empty" class="empty" style="display:none">
-    No deployments found
+    No builds found
   </div>
 </div>
 
@@ -237,41 +187,41 @@ const RENDER_LIMIT = 500;
 let allRecords = [];
 
 async function fetchArtifacts() {
-  const ns = namespace.value.trim();
-  const name = document.getElementById("name").value.trim();
   const status = document.getElementById("status");
   const table = document.getElementById("table");
   const empty = document.getElementById("empty");
+  const repository = document.getElementById("name").value.trim();
 
   status.textContent = "Loading…";
   table.style.display = "none";
   empty.style.display = "none";
   allRecords = [];
 
-  const url =
-    `http://localhost:9401/artifactd/discover` +
-    `?namespace=${encodeURIComponent(ns)}` +
-    `&name=${encodeURIComponent(name)}`;
-
   try {
-    const res = await fetch(url);
+    const res = await fetch(
+      `http://mb1:9600/artifactd/build?repository=${encodeURIComponent(repository)}`,
+      { headers: { "X-Namespace": "*" } }
+    );
+
     if (!res.ok) throw new Error();
 
-    const text = await res.text();
-    text.split("\n").filter(Boolean).forEach(line => {
-      try { allRecords.push(JSON.parse(line)); } catch {}
-    });
+    const wrapper = await res.json();
+
+    // ✅ contract: { success: [ ... ] }
+    allRecords = Array.isArray(wrapper.success)
+      ? wrapper.success
+      : [];
 
     allRecords.sort(
-      (a,b) => new Date(b.published_at) - new Date(a.published_at)
+      (a, b) => new Date(b.published_at) - new Date(a.published_at)
     );
 
     buildFilters(allRecords);
     renderTable();
 
-    status.textContent = `Loaded ${allRecords.length} deployments`;
+    status.textContent = `Loaded ${allRecords.length} builds`;
   } catch {
-    status.textContent = "Failed to fetch deployments";
+    status.textContent = "Failed to fetch builds";
   }
 }
 
@@ -316,17 +266,22 @@ function renderTable() {
 
   for (let i = 0; i < limit; i++) {
     const r = filtered[i];
-    const tr = document.createElement("tr");
 
+    const downloads = (r.archive || [])
+      .map(a => `<a href="${a.url}" target="_blank" class="tag">${a.id}</a>`)
+      .join(" ");
+
+    const tr = document.createElement("tr");
     tr.innerHTML = `
       <td data-label="ID" class="mono">${r.id}</td>
       <td data-label="Time">${new Date(r.published_at).toLocaleString()}</td>
       <td data-label="Actor">${r.actor}</td>
       <td data-label="Branch">${r.branch}</td>
-      <td data-label="Tag">${r.tag ? `<span class="tag">${r.tag}</span>` : "-"}</td>
+      <td data-label="Repository">${r.repository_id}</td>
       <td data-label="Commit" class="mono commit">${r.commit_id}</td>
       <td data-label="Source">${r.source}</td>
-      <td data-label="OS / Arch" class="mono">${(r.os_arch || []).join(",")}</td>
+      <td data-label="OS / Arch" class="mono">${(r.os_arch || []).join(", ")}</td>
+      <td data-label="Download">${downloads || "-"}</td>
     `;
 
     frag.appendChild(tr);

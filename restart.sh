@@ -29,3 +29,7 @@ clickhouse-client -h clickhouse-darurat --password default -q 'drop database `ar
 clickhouse-client -h clickhouse-darurat --password default -q 'drop database `artifactd-v1_3_1`'
 clickhouse-client -h clickhouse-darurat --password default -q 'drop database `artifactd-v1_3_2`'
 clickhouse-client -h clickhouse-darurat --password default -q 'drop database `artifactd-v1_3_3`'
+
+ssh root@mb1 "sudo systemctl restart deployd"
+ssh root@mb3 "sudo systemctl restart deployd"
+ssh root@mb3 "sudo systemctl restart deployd"
