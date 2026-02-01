@@ -2,7 +2,7 @@ module github.com/desain-gratis/deployd
 
 go 1.24.0
 
-replace github.com/desain-gratis/common => ../common
+// replace github.com/desain-gratis/common => ../common
 
 // asked chatgpt
 replace git.apache.org/thrift.git => github.com/apache/thrift v0.22.0
@@ -11,7 +11,7 @@ require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.42.0
 	github.com/coder/websocket v1.8.14
 	github.com/coreos/go-systemd/v22 v22.6.0
-	github.com/desain-gratis/common v0.0.0-00010101000000-000000000000
+	github.com/desain-gratis/common v0.0.2-0.20260201145442-11d7f4fcfab6
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/lni/dragonboat/v4 v4.0.0-20250723143628-076c7f6497dc
 	github.com/rs/zerolog v1.34.0
