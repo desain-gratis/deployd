@@ -9,11 +9,10 @@ import (
 var _ mycontent.Data = &Repository{}
 
 type Repository struct {
-	IDx         uint32    `json:"id" ch:"id"`
-	UID         string    `json:"uid"`
-	Ns          string    `json:"namespace" ch:"namespace"`
+	Id          string    `json:"id"`
+	Ns          string    `json:"namespace"`
 	Name        string    `json:"name"`
-	PublishedAt time.Time `json:"published_at" ch:"published_at"`
+	PublishedAt time.Time `json:"published_at"`
 	URLx        string    `json:"url"`
 }
 
@@ -22,7 +21,7 @@ func (r *Repository) CreatedTime() time.Time {
 }
 
 func (r *Repository) ID() string {
-	return r.UID
+	return r.Id
 }
 
 func (r *Repository) Namespace() string {
@@ -47,7 +46,7 @@ func (r *Repository) WithCreatedTime(t time.Time) mycontent.Data {
 }
 
 func (r *Repository) WithID(id string) mycontent.Data {
-	r.UID = id
+	r.Id = id
 	return r
 }
 

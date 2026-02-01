@@ -220,6 +220,8 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 
 // enableArtifactDienableArtifactdModulescoveryModule enables upload artifact discovery / metadata query
 func enableArtifactdModule(ctx context.Context, router *httprouter.Router) {
+	// TODO: separate between config / CRUD with the incrementalID so we can reset the DB more easily
+	// TODO: we can use commit ID purely on the archive, need to modify the gh-action to use bare archive client (instead of Builder)
 	ctx, err := raft_runner.RunReplica[any](
 		ctx,
 		"artifactd-v1",

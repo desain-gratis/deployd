@@ -10,11 +10,19 @@ var _ mycontent.Data = &ServiceDefinition{}
 
 type ServiceDefinition struct {
 	Id   string `json:"id,omitempty"`
-	Ns   string `json:"namespace" ch:"namespace"`
+	Ns   string `json:"namespace"`
 	Name string `json:"name" ch:"name"`
 
-	PublishedAt time.Time `json:"published_at" ch:"published_at"`
+	Repository ArtifactdRepository `json:"repository"`
+
+	PublishedAt time.Time `json:"published_at"`
 	URLx        string    `json:"url"`
+}
+
+type ArtifactdRepository struct {
+	URL       string `json:"url"`       // in case external
+	Namespace string `json:"namespace"` // in case external
+	ID        string `json:"id"`
 }
 
 func (a *ServiceDefinition) CreatedTime() time.Time {
