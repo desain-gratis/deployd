@@ -31,6 +31,25 @@ func init() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr}).With().Logger()
 }
 
+var (
+	publicBaseURL string
+
+	// host specific configuration
+	hostConfigUsecase *mycontent_base.Handler[*entity.Host]
+
+	// service configuration (to be installed on the host)
+	serviceDefinitionUsecase *mycontent_base.Handler[*entity.ServiceDefinition]
+
+	// archive / artifact repository storing build & archive information
+	repositoryUsecase *mycontent_base.Handler[*entity.Repository]
+
+	// store service's env
+	envUsecase *mycontent_base.Handler[*entity.Env]
+
+	// store service's secret
+	secretUsecase *mycontent_base.Handler[*entity.Secret]
+)
+
 func main() {
 	ctx, cancel := context.WithCancelCause(context.Background())
 
@@ -53,12 +72,14 @@ func main() {
 
 	// enableSystemdModule(ctx, router)
 	enableArtifactdModule(ctx, router)
-
 	enableDeploydModule(ctx, router)
-
 	enableSecretdModule(ctx, router)
-
 	enableUI(ctx, router)
+
+	err = initWithTestData(ctx)
+	if err != nil {
+		log.Err(err).Msgf("failed to initialize starting data in deployd")
+	}
 
 	// update host config first
 
@@ -91,25 +112,38 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
 		ctx,
 		"secretd-v1",
 		content_chraft.New(nil,
-			content_chraft.TableConfig{Name: "secretd_value", RefSize: 1},
+			content_chraft.TableConfig{Name: "secretd_secret", RefSize: 0},
+			content_chraft.TableConfig{Name: "secretd_env", RefSize: 0},
 		),
 	)
 	if err != nil {
 		log.Panic().Msgf("failed to run secretd raft: %v", err)
 	}
 
-	baseURL := ""
-
-	secretKVHandler := mycontentapi.NewFromStorage[*entity.ServiceDefinition](
-		baseURL+"/secretd/kv",
-		[]string{"service"}, // refers to deployd service definition
-		content_chraft.NewStorageClient(ctx, "secretd_kv"),
-		1,
+	secretStore := content_chraft.NewStorageClient(ctx, "secretd_secret")
+	secretUsecase = mycontent_base.New[*entity.Secret](secretStore, 0)
+	secretHandler := mycontentapi.New(
+		secretUsecase,
+		publicBaseURL+"/secretd/secret",
+		nil,
 	)
 
-	router.POST("/secretd/kv", secretKVHandler.Post)
-	router.GET("/secretd/kv", secretKVHandler.Get)
-	router.DELETE("/secretd/kv", secretKVHandler.Delete)
+	envStore := content_chraft.NewStorageClient(ctx, "secretd_env")
+	envUsecase = mycontent_base.New[*entity.Env](envStore, 0)
+	envHandler := mycontentapi.New(
+		envUsecase,
+		publicBaseURL+"/secretd/env",
+		nil,
+	)
+
+	// obviously right now is not secure
+	router.POST("/secretd/secret", secretHandler.Post)
+	router.GET("/secretd/secret", secretHandler.Get)
+	router.DELETE("/secretd/secret", secretHandler.Delete)
+
+	router.POST("/secretd/env", envHandler.Post)
+	router.GET("/secretd/env", envHandler.Get)
+	router.DELETE("/secretd/env", envHandler.Delete)
 }
 
 func getReplicaID() uint64 {
@@ -144,47 +178,46 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 		log.Panic().Msgf("failed to run deployd raft: %v", err)
 	}
 
-	baseURL := ""
-
 	// config storage
 	hostConfigStore := content_chraft.NewStorageClient(ctx, "deployd_host")
-	hostConfigUsecase := mycontent_base.New[*entity.Host](hostConfigStore, 0)
+	hostConfigUsecase = mycontent_base.New[*entity.Host](hostConfigStore, 0)
 	hostConfigHandler := mycontentapi.New(
 		hostConfigUsecase,
-		baseURL+"/deployd/host",
+		publicBaseURL+"/deployd/host",
 		nil,
 	)
 
-	serviceDefinitionHandler := mycontentapi.NewFromStorage[*entity.ServiceDefinition](
-		baseURL+"/deployd/service",
+	serviceDefinitionStorage := content_chraft.NewStorageClient(ctx, "deployd_service")
+	serviceDefinitionUsecase = mycontent_base.New[*entity.ServiceDefinition](serviceDefinitionStorage, 0)
+	serviceDefinitionHandler := mycontentapi.New(
+		serviceDefinitionUsecase,
+		publicBaseURL+"/deployd/service",
 		nil,
-		content_chraft.NewStorageClient(ctx, "deployd_service"),
-		0,
 	)
 
 	raftHostHandler := mycontentapi.NewFromStorage[*entity.RaftHost](
-		baseURL+"/deployd/raft/host",
+		publicBaseURL+"/deployd/raft/host",
 		[]string{"service"},
 		content_chraft.NewStorageClient(ctx, "deployd_raft_host"),
 		1,
 	)
 
 	raftReplicaHandler := mycontentapi.NewFromStorage[*entity.RaftReplica](
-		baseURL+"/deployd/raft/replica",
+		publicBaseURL+"/deployd/raft/replica",
 		[]string{"service"},
 		content_chraft.NewStorageClient(ctx, "deployd_raft_replica"),
 		1,
 	)
 
-	// Service registry
-	router.POST("/deployd/service", serviceDefinitionHandler.Post)
-	router.GET("/deployd/service", serviceDefinitionHandler.Get)
-	router.DELETE("/deployd/service", serviceDefinitionHandler.Delete)
-
 	// Deployd raft host specific configuration
 	router.POST("/deployd/host", hostConfigHandler.Post)
 	router.GET("/deployd/host", hostConfigHandler.Get)
 	router.DELETE("/deployd/host", hostConfigHandler.Delete)
+
+	// Service registry
+	router.POST("/deployd/service", serviceDefinitionHandler.Post)
+	router.GET("/deployd/service", serviceDefinitionHandler.Get)
+	router.DELETE("/deployd/service", serviceDefinitionHandler.Delete)
 
 	// Replica registry for each service.
 	// We get the source of truth from application that use deployd library.
@@ -196,8 +229,15 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 	router.POST("/deployd/raft/host", raftHostHandler.Post)
 	router.GET("/deployd/raft/host", raftHostHandler.Get)
 	router.DELETE("/deployd/raft/host", raftHostHandler.Delete)
+}
+
+func initWithTestData(
+	ctx context.Context,
+) error {
+	var err error
 
 	// Populate host config API with config from file
+	// Only this config is required. The rest are temporary for debugging
 	for {
 		_, err = hostConfigUsecase.Post(ctx, &entity.Host{
 			Ns:           "deployd",
@@ -210,12 +250,80 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 			FQDN:        "com.deployd",
 			PublishedAt: time.Now(),
 		}, nil)
-		if !errors.Is(err, content_chraft.ErrNotReady) {
+		if err == nil {
 			break
 		}
+		if !errors.Is(err, content_chraft.ErrNotReady) {
+			return err
+		}
+
 		time.Sleep(1 * time.Second)
 	}
 
+	// init with one service (a "user-profile" simple app)
+	_, err = serviceDefinitionUsecase.Post(ctx, &entity.ServiceDefinition{
+		Ns:   "deployd",
+		Id:   "user-profile",
+		Name: "DG User Profile Service",
+		Repository: entity.ArtifactdRepository{
+			URL: "",
+			Ns:  "deployd",
+			ID:  "user-profile",
+		},
+		PublishedAt: time.Now(),
+	}, nil)
+	if err != nil {
+		return err
+	}
+
+	// init with one repository (a "user-profile" simple app)
+	_, err = repositoryUsecase.Post(ctx, &entity.Repository{
+		Ns:          "deployd",
+		Id:          "user-profile",
+		Name:        "DG User Profile Repository",
+		Source:      "https://github.com/desain-gratis/common",
+		URLx:        "",
+		PublishedAt: time.Now(),
+	}, nil)
+	if err != nil {
+		return err
+	}
+
+	// init with one repository (a "user-profile" simple app)
+	_, err = envUsecase.Post(ctx, &entity.Env{
+		KV: entity.KV{
+			Ns:      "deployd",
+			Service: "user-profile",
+			Value: map[string]string{
+				"MESSAGE":           "Hello from deployd 👋👋👋",
+				"DEPLOYD_RAFT_PORT": "9966",
+			},
+			PublishedAt: time.Now(),
+		},
+	}, nil)
+	if err != nil {
+		return err
+	}
+
+	check := &entity.Secret{
+		KV: entity.KV{
+			Ns:      "deployd",
+			Service: "user-profile",
+			Value: map[string]string{
+				"signing-key": "obviously-not S0 s3Cure secret!",
+				"api1.secret": "secret for api1",
+				"api1.id":     "id for api1",
+			},
+			PublishedAt: time.Now(),
+		},
+	}
+	// init with one repository (a "user-profile" simple app)
+	_, err = secretUsecase.Post(ctx, check, nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // enableArtifactDienableArtifactdModulescoveryModule enables upload artifact discovery / metadata query
@@ -235,8 +343,6 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router) {
 		log.Panic().Msgf("failed to run artifactd raft: %v", err)
 	}
 
-	baseURL := ""
-
 	buildArtifactBlob, err := blob_s3.New(
 		config.GetString("storage.s3.blob.endpoint"),
 		config.GetString("storage.s3.blob.key_id"),
@@ -249,15 +355,17 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router) {
 		log.Fatal().Msgf("failure to create blob storage client: %v", err)
 	}
 
-	repositoryHandler := mycontentapi.NewFromStorage[*entity.BuildArtifact](
-		baseURL+"/artifactd/repository",
+	repositoryStorage := content_chraft.NewStorageClient(ctx, "artifactd_repository")
+	repositoryUsecase = mycontent_base.New[*entity.Repository](repositoryStorage, 0)
+
+	repositoryHandler := mycontentapi.New(
+		repositoryUsecase,
+		publicBaseURL+"/artifactd/repository",
 		nil,
-		content_chraft.NewStorageClient(ctx, "artifactd_repository"),
-		0,
 	)
 
 	buildHandler := mycontentapi.NewFromStorage[*entity.BuildArtifact](
-		baseURL+"/artifactd/build",
+		publicBaseURL+"/artifactd/build",
 		[]string{"repository"},
 		content_chraft.NewStorageClient(ctx, "artifactd_build"),
 		1,
@@ -271,7 +379,7 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router) {
 			false,
 			"artifactd/archive",
 		),
-		baseURL+"/artifactd/archive",
+		publicBaseURL+"/artifactd/archive",
 		[]string{"repository", "build"},
 		"",
 	)

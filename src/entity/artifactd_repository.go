@@ -12,8 +12,11 @@ type Repository struct {
 	Id          string    `json:"id"`
 	Ns          string    `json:"namespace"`
 	Name        string    `json:"name"`
+	Source      string    `json:"source"`
 	PublishedAt time.Time `json:"published_at"`
 	URLx        string    `json:"url"`
+
+	// TODO: generate API KEY / API SECRET to validate archive upload in /secretd
 }
 
 func (r *Repository) CreatedTime() time.Time {

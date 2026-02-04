@@ -25,6 +25,9 @@ type Host struct {
 type DeploydRaftConfig struct {
 	// (Preferred) replica ID for this host
 	ReplicaID uint64 `json:"replica_id"`
+
+	WALDir      string `json:"wal_dir"` // validate / normalize dir
+	NodeHostDir string `json:"node_host_dir"`
 }
 
 func (a *Host) CreatedTime() time.Time {
