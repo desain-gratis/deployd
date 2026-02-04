@@ -34,6 +34,15 @@
 const API = "http://localhost:9401";
 const headers = { "X-Namespace": "*" };
 
+let buildPoller = null;
+let lastRepoId = null;
+
+document.getElementById('modal').addEventListener('click', function(e){
+  if(e.target === this){
+    closeModal();
+  }
+});
+
 function el(html){ const d=document.createElement('div'); d.innerHTML=html; return d.firstElementChild; }
 function setPage(content){ document.getElementById('app').innerHTML=''; document.getElementById('app').appendChild(content); }
 
@@ -61,9 +70,13 @@ function primaryBtn(label, color, onclick){
 function closeModal(){
   document.getElementById('modal').classList.add('hidden');
   document.getElementById('modal').classList.remove('flex');
+  if (buildPoller) {
+    clearInterval(buildPoller);
+    buildPoller = null;
+  }
 }
 
-/* -------- Key / Value Table (Env & Secret) -------- */
+/* -------- Key / Value Table -------- */
 
 function showKeyValueTable(title, wrapper){
   const value = (wrapper && wrapper[0] && wrapper[0].value) || {};
@@ -145,6 +158,13 @@ function showBuildTable(builds){
   `;
   document.getElementById('modal').classList.remove('hidden');
   document.getElementById('modal').classList.add('flex');
+
+  if (!buildPoller && lastRepoId) {
+    buildPoller = setInterval(async () => {
+      const latest = await api('/artifactd/build?repository=' + lastRepoId);
+      showBuildTable(latest);
+    }, 10000);
+  }
 }
 
 function showBuildDetail(b){
@@ -219,6 +239,7 @@ async function repoPage(){
 }
 
 async function repoDetail(id){
+  lastRepoId = id;
   const builds = await api('/artifactd/build?repository=' + id);
 
   setPage(el(`
