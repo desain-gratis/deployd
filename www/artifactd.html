@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Build History</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<style>
+:root {
+  --bg:#0f172a;
+  --panel:#020617;
+  --border:#1e293b;
+  --text:#e5e7eb;
+  --muted:#94a3b8;
+  --accent:#38bdf8;
+  --success:#22c55e;
+  --warn:#f59e0b;
+}
+
+* {
+  box-sizing:border-box;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto;
+}
+
+body { margin:0; background:var(--bg); color:var(--text); }
+
+header { padding:14px 16px; border-bottom:1px solid var(--border); }
+h1 { margin:0; font-size:17px; }
+p { margin:4px 0 0; font-size:12px; color:var(--muted); }
+
+.container { padding:12px 14px; max-width:1400px; margin:auto; }
+
+.controls {
+  display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;
+}
+
+input, select {
+  flex:1 1 140px;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:7px 9px;
+  font-size:13px;
+  color:var(--text);
+}
+
+button {
+  flex:1 1 100%;
+  background:var(--accent);
+  border:none;
+  border-radius:6px;
+  padding:8px;
+  font-size:13px;
+  font-weight:600;
+  cursor:pointer;
+  color:#020617;
+}
+
+@media (min-width: 640px) {
+  button { flex:0 0 auto; padding:7px 14px; }
+}
+
+.status { font-size:12px; color:var(--muted); margin-bottom:6px; }
+.warn { color:var(--warn); }
+
+table {
+  width:100%;
+  border-collapse:collapse;
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:8px;
+  overflow:hidden;
+}
+
+th, td {
+  padding:7px 10px;
+  font-size:12px;
+  border-bottom:1px solid var(--border);
+  white-space:nowrap;
+}
+
+th { text-align:left; color:var(--muted); font-weight:600; }
+
+tbody tr:hover { background:#020617; }
+
+.mono { font-family:ui-monospace,Menlo,monospace; }
+.commit { color:var(--success); }
+
+.tag {
+  background:#082f49;
+  color:var(--accent);
+  padding:2px 6px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:600;
+  text-decoration:none;
+}
+
+td[data-label="ID"] {
+  font-weight:600;
+  color:#c7d2fe;
+}
+
+/* ===== Mobile Layout ===== */
+
+@media (max-width: 640px) {
+  table, thead { display:none; }
+  tbody, tr { display:block; }
+
+  tr {
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:10px;
+    margin-bottom:10px;
+  }
+
+  td {
+    display:flex;
+    justify-content:space-between;
+    padding:4px 0;
+    border:none;
+    white-space:normal;
+  }
+
+  td::before {
+    content:attr(data-label);
+    color:var(--muted);
+    font-size:11px;
+    margin-right:10px;
+  }
+}
+
+.empty {
+  text-align:center;
+  margin-top:20px;
+  font-size:13px;
+  color:var(--muted);
+}
+</style>
+</head>
+
+<body>
+<header>
+  <h1>Build History</h1>
+  <p>Artifact builds · mobile-friendly · large-scale DevX</p>
+</header>
+
+<div class="container">
+  <div class="controls">
+    <input id="name" value="user-profile" placeholder="repository">
+    <select id="actorFilter">
+      <option value="">All actors</option>
+    </select>
+    <select id="branchFilter">
+      <option value="">All branches</option>
+    </select>
+    <button onclick="fetchArtifacts()">Fetch</button>
+  </div>
+
+  <div id="status" class="status"></div>
+
+  <table id="table" style="display:none">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Time</th>
+        <th>Actor</th>
+        <th>Branch</th>
+        <th>Repository</th>
+        <th>Commit</th>
+        <th>Source</th>
+        <th>OS / Arch</th>
+        <th>Download</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+
+  <div id="empty" class="empty" style="display:none">
+    No builds found
+  </div>
+</div>
+
+<script>
+const RENDER_LIMIT = 500;
+let allRecords = [];
+
+async function fetchArtifacts() {
+  const status = document.getElementById("status");
+  const table = document.getElementById("table");
+  const empty = document.getElementById("empty");
+  const repository = document.getElementById("name").value.trim();
+
+  status.textContent = "Loading…";
+  table.style.display = "none";
+  empty.style.display = "none";
+  allRecords = [];
+
+  try {
+    const res = await fetch(
+      `http://mb1:9600/artifactd/build?repository=${encodeURIComponent(repository)}`,
+      { headers: { "X-Namespace": "*" } }
+    );
+
+    if (!res.ok) throw new Error();
+
+    const wrapper = await res.json();
+
+    // ✅ contract: { success: [ ... ] }
+    allRecords = Array.isArray(wrapper.success)
+      ? wrapper.success
+      : [];
+
+    allRecords.sort(
+      (a, b) => new Date(b.published_at) - new Date(a.published_at)
+    );
+
+    buildFilters(allRecords);
+    renderTable();
+
+    status.textContent = `Loaded ${allRecords.length} builds`;
+  } catch {
+    status.textContent = "Failed to fetch builds";
+  }
+}
+
+function buildFilters(records) {
+  const actors = [...new Set(records.map(r => r.actor).filter(Boolean))];
+  const branches = [...new Set(records.map(r => r.branch).filter(Boolean))];
+
+  actorFilter.innerHTML = `<option value="">All actors</option>`;
+  branchFilter.innerHTML = `<option value="">All branches</option>`;
+
+  actors.forEach(a => actorFilter.add(new Option(a, a)));
+  branches.forEach(b => branchFilter.add(new Option(b, b)));
+
+  actorFilter.onchange = branchFilter.onchange = renderTable;
+}
+
+function renderTable() {
+  const actor = actorFilter.value;
+  const branch = branchFilter.value;
+  const tbody = document.getElementById("tbody");
+  const table = document.getElementById("table");
+  const empty = document.getElementById("empty");
+  const status = document.getElementById("status");
+
+  tbody.innerHTML = "";
+
+  let filtered = allRecords;
+  if (actor) filtered = filtered.filter(r => r.actor === actor);
+  if (branch) filtered = filtered.filter(r => r.branch === branch);
+
+  if (!filtered.length) {
+    table.style.display = "none";
+    empty.style.display = "block";
+    return;
+  }
+
+  table.style.display = "table";
+  empty.style.display = "none";
+
+  const frag = document.createDocumentFragment();
+  const limit = Math.min(filtered.length, RENDER_LIMIT);
+
+  for (let i = 0; i < limit; i++) {
+    const r = filtered[i];
+
+    const downloads = (r.archive || [])
+      .map(a => `<a href="${a.url}" target="_blank" class="tag">${a.id}</a>`)
+      .join(" ");
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td data-label="ID" class="mono">${r.id}</td>
+      <td data-label="Time">${new Date(r.published_at).toLocaleString()}</td>
+      <td data-label="Actor">${r.actor}</td>
+      <td data-label="Branch">${r.branch}</td>
+      <td data-label="Repository">${r.repository_id}</td>
+      <td data-label="Commit" class="mono commit">${r.commit_id}</td>
+      <td data-label="Source">${r.source}</td>
+      <td data-label="OS / Arch" class="mono">${(r.os_arch || []).join(", ")}</td>
+      <td data-label="Download">${downloads || "-"}</td>
+    `;
+
+    frag.appendChild(tr);
+  }
+
+  tbody.appendChild(frag);
+
+  if (filtered.length > RENDER_LIMIT) {
+    status.innerHTML =
+      `Showing ${RENDER_LIMIT}/${filtered.length} results ` +
+      `<span class="warn">(refine filters)</span>`;
+  }
+}
+
+fetchArtifacts();
+</script>
+</body>
+</html>

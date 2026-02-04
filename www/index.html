@@ -1,302 +1,277 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8" />
-<title>Build History</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-
-<style>
-:root {
-  --bg:#0f172a;
-  --panel:#020617;
-  --border:#1e293b;
-  --text:#e5e7eb;
-  --muted:#94a3b8;
-  --accent:#38bdf8;
-  --success:#22c55e;
-  --warn:#f59e0b;
-}
-
-* {
-  box-sizing:border-box;
-  font-family:system-ui,-apple-system,Segoe UI,Roboto;
-}
-
-body { margin:0; background:var(--bg); color:var(--text); }
-
-header { padding:14px 16px; border-bottom:1px solid var(--border); }
-h1 { margin:0; font-size:17px; }
-p { margin:4px 0 0; font-size:12px; color:var(--muted); }
-
-.container { padding:12px 14px; max-width:1400px; margin:auto; }
-
-.controls {
-  display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px;
-}
-
-input, select {
-  flex:1 1 140px;
-  background:var(--panel);
-  border:1px solid var(--border);
-  border-radius:6px;
-  padding:7px 9px;
-  font-size:13px;
-  color:var(--text);
-}
-
-button {
-  flex:1 1 100%;
-  background:var(--accent);
-  border:none;
-  border-radius:6px;
-  padding:8px;
-  font-size:13px;
-  font-weight:600;
-  cursor:pointer;
-  color:#020617;
-}
-
-@media (min-width: 640px) {
-  button { flex:0 0 auto; padding:7px 14px; }
-}
-
-.status { font-size:12px; color:var(--muted); margin-bottom:6px; }
-.warn { color:var(--warn); }
-
-table {
-  width:100%;
-  border-collapse:collapse;
-  background:var(--panel);
-  border:1px solid var(--border);
-  border-radius:8px;
-  overflow:hidden;
-}
-
-th, td {
-  padding:7px 10px;
-  font-size:12px;
-  border-bottom:1px solid var(--border);
-  white-space:nowrap;
-}
-
-th { text-align:left; color:var(--muted); font-weight:600; }
-
-tbody tr:hover { background:#020617; }
-
-.mono { font-family:ui-monospace,Menlo,monospace; }
-.commit { color:var(--success); }
-
-.tag {
-  background:#082f49;
-  color:var(--accent);
-  padding:2px 6px;
-  border-radius:999px;
-  font-size:11px;
-  font-weight:600;
-  text-decoration:none;
-}
-
-td[data-label="ID"] {
-  font-weight:600;
-  color:#c7d2fe;
-}
-
-/* ===== Mobile Layout ===== */
-
-@media (max-width: 640px) {
-  table, thead { display:none; }
-  tbody, tr { display:block; }
-
-  tr {
-    background:var(--panel);
-    border:1px solid var(--border);
-    border-radius:8px;
-    padding:10px;
-    margin-bottom:10px;
-  }
-
-  td {
-    display:flex;
-    justify-content:space-between;
-    padding:4px 0;
-    border:none;
-    white-space:normal;
-  }
-
-  td::before {
-    content:attr(data-label);
-    color:var(--muted);
-    font-size:11px;
-    margin-right:10px;
-  }
-}
-
-.empty {
-  text-align:center;
-  margin-top:20px;
-  font-size:13px;
-  color:var(--muted);
-}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Deployd Console</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
-<body>
-<header>
-  <h1>Build History</h1>
-  <p>Artifact builds · mobile-friendly · large-scale DevX</p>
-</header>
+<body class="bg-slate-900 text-slate-200">
 
-<div class="container">
-  <div class="controls">
-    <input id="name" value="user-profile" placeholder="repository">
-    <select id="actorFilter">
-      <option value="">All actors</option>
-    </select>
-    <select id="branchFilter">
-      <option value="">All branches</option>
-    </select>
-    <button onclick="fetchArtifacts()">Fetch</button>
+<!-- Top Bar -->
+<div class="bg-slate-800 border-b border-slate-700">
+  <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
+    <h1 class="text-lg md:text-xl font-semibold text-white">Deployd Console</h1>
+    <button onclick="landing()" class="text-xs md:text-sm text-slate-400 hover:text-white">Home</button>
   </div>
+</div>
 
-  <div id="status" class="status"></div>
+<div id="app" class="max-w-6xl mx-auto p-4 md:p-6"></div>
 
-  <table id="table" style="display:none">
-    <thead>
-      <tr>
-        <th>ID</th>
-        <th>Time</th>
-        <th>Actor</th>
-        <th>Branch</th>
-        <th>Repository</th>
-        <th>Commit</th>
-        <th>Source</th>
-        <th>OS / Arch</th>
-        <th>Download</th>
-      </tr>
-    </thead>
-    <tbody id="tbody"></tbody>
-  </table>
-
-  <div id="empty" class="empty" style="display:none">
-    No builds found
+<!-- Modal -->
+<div id="modal" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-50 p-3">
+  <div class="bg-slate-800 w-full md:w-5/6 max-h-[90vh] rounded-xl shadow-2xl overflow-hidden flex flex-col border border-slate-700">
+    <div class="flex justify-between items-center px-4 py-3 border-b border-slate-700">
+      <h2 id="modal-title" class="text-base md:text-lg font-semibold"></h2>
+      <button onclick="closeModal()" class="text-slate-400 hover:text-red-400 text-xl">✕</button>
+    </div>
+    <div id="modal-body" class="p-4 overflow-auto text-xs md:text-sm"></div>
   </div>
 </div>
 
 <script>
-const RENDER_LIMIT = 500;
-let allRecords = [];
+const API = "http://localhost:9401";
+const headers = { "X-Namespace": "*" };
 
-async function fetchArtifacts() {
-  const status = document.getElementById("status");
-  const table = document.getElementById("table");
-  const empty = document.getElementById("empty");
-  const repository = document.getElementById("name").value.trim();
+function el(html){ const d=document.createElement('div'); d.innerHTML=html; return d.firstElementChild; }
+function setPage(content){ document.getElementById('app').innerHTML=''; document.getElementById('app').appendChild(content); }
 
-  status.textContent = "Loading…";
-  table.style.display = "none";
-  empty.style.display = "none";
-  allRecords = [];
-
-  try {
-    const res = await fetch(
-      `http://mb1:9600/artifactd/build?repository=${encodeURIComponent(repository)}`,
-      { headers: { "X-Namespace": "*" } }
-    );
-
-    if (!res.ok) throw new Error();
-
-    const wrapper = await res.json();
-
-    // ✅ contract: { success: [ ... ] }
-    allRecords = Array.isArray(wrapper.success)
-      ? wrapper.success
-      : [];
-
-    allRecords.sort(
-      (a, b) => new Date(b.published_at) - new Date(a.published_at)
-    );
-
-    buildFilters(allRecords);
-    renderTable();
-
-    status.textContent = `Loaded ${allRecords.length} builds`;
-  } catch {
-    status.textContent = "Failed to fetch builds";
-  }
+function backBtn(fn){
+  return `<button onclick="${fn}" class="text-xs md:text-sm text-slate-400 hover:text-white mb-4">← Back</button>`;
 }
 
-function buildFilters(records) {
-  const actors = [...new Set(records.map(r => r.actor).filter(Boolean))];
-  const branches = [...new Set(records.map(r => r.branch).filter(Boolean))];
-
-  actorFilter.innerHTML = `<option value="">All actors</option>`;
-  branchFilter.innerHTML = `<option value="">All branches</option>`;
-
-  actors.forEach(a => actorFilter.add(new Option(a, a)));
-  branches.forEach(b => branchFilter.add(new Option(b, b)));
-
-  actorFilter.onchange = branchFilter.onchange = renderTable;
+function card(title, body, onclick=""){
+  return `
+    <div onclick="${onclick}" class="bg-slate-800 border border-slate-700 rounded-xl p-4 md:p-6 cursor-pointer hover:border-slate-500 transition">
+      <h3 class="font-semibold text-white mb-1">${title}</h3>
+      <div class="text-xs md:text-sm text-slate-400">${body}</div>
+    </div>`;
 }
 
-function renderTable() {
-  const actor = actorFilter.value;
-  const branch = branchFilter.value;
-  const tbody = document.getElementById("tbody");
-  const table = document.getElementById("table");
-  const empty = document.getElementById("empty");
-  const status = document.getElementById("status");
+function primaryBtn(label, color, onclick){
+  return `<button onclick='${onclick}'
+    class="px-3 py-2 text-xs md:text-sm rounded-lg text-white shadow ${color} hover:opacity-90 transition">
+    ${label}
+  </button>`;
+}
 
-  tbody.innerHTML = "";
+/* ---------------- Modal Helpers ---------------- */
 
-  let filtered = allRecords;
-  if (actor) filtered = filtered.filter(r => r.actor === actor);
-  if (branch) filtered = filtered.filter(r => r.branch === branch);
+function closeModal(){
+  document.getElementById('modal').classList.add('hidden');
+  document.getElementById('modal').classList.remove('flex');
+}
 
-  if (!filtered.length) {
-    table.style.display = "none";
-    empty.style.display = "block";
-    return;
-  }
+/* -------- Key / Value Table (Env & Secret) -------- */
 
-  table.style.display = "table";
-  empty.style.display = "none";
+function showKeyValueTable(title, wrapper){
+  const value = (wrapper && wrapper[0] && wrapper[0].value) || {};
 
-  const frag = document.createDocumentFragment();
-  const limit = Math.min(filtered.length, RENDER_LIMIT);
+  const rows = Object.entries(value).map(([k,v]) => `
+    <tr class="border-b border-slate-700">
+      <td class="p-2 font-mono text-blue-400 break-all">${k}</td>
+      <td class="p-2 break-all">${v}</td>
+    </tr>
+  `).join("");
 
-  for (let i = 0; i < limit; i++) {
-    const r = filtered[i];
+  document.getElementById('modal-title').innerText = title;
+  document.getElementById('modal-body').innerHTML = `
+    <div class="overflow-auto">
+      <table class="min-w-[600px] w-full text-left border border-slate-700">
+        <thead class="bg-slate-800 text-slate-400">
+          <tr>
+            <th class="p-2 w-1/3">Key</th>
+            <th class="p-2">Value</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
 
-    const downloads = (r.archive || [])
-      .map(a => `<a href="${a.url}" target="_blank" class="tag">${a.id}</a>`)
-      .join(" ");
+  document.getElementById('modal').classList.remove('hidden');
+  document.getElementById('modal').classList.add('flex');
+}
 
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td data-label="ID" class="mono">${r.id}</td>
-      <td data-label="Time">${new Date(r.published_at).toLocaleString()}</td>
-      <td data-label="Actor">${r.actor}</td>
-      <td data-label="Branch">${r.branch}</td>
-      <td data-label="Repository">${r.repository_id}</td>
-      <td data-label="Commit" class="mono commit">${r.commit_id}</td>
-      <td data-label="Source">${r.source}</td>
-      <td data-label="OS / Arch" class="mono">${(r.os_arch || []).join(", ")}</td>
-      <td data-label="Download">${downloads || "-"}</td>
+/* ---------------- Build Table ---------------- */
+
+function showBuildTable(builds){
+  const rows = builds.map(b => {
+    const shortCommit = b.commit_id.slice(0,7);
+    const time = new Date(b.published_at).toLocaleString();
+    const osarch = (b.os_arch || []).join(", ");
+
+    const archiveLinks = (b.archive || []).map(a =>
+      `<a href="${a.url}" target="_blank" class="text-blue-400 underline">${a.id}</a>`
+    ).join("<br>");
+
+    return `
+      <tr class="border-b border-slate-700">
+        <td class="p-2">${b.id}</td>
+        <td class="p-2">${time}</td>
+        <td class="p-2">${b.branch || '-'}</td>
+        <td class="p-2 font-mono text-blue-400">${shortCommit}</td>
+        <td class="p-2">${b.actor}</td>
+        <td class="p-2">${osarch}</td>
+        <td class="p-2">${archiveLinks}</td>
+        <td class="p-2">
+          <button onclick='showBuildDetail(${JSON.stringify(b)})'
+            class="text-xs bg-slate-600 px-2 py-1 rounded">Detail</button>
+        </td>
+      </tr>
     `;
+  }).join("");
 
-    frag.appendChild(tr);
-  }
-
-  tbody.appendChild(frag);
-
-  if (filtered.length > RENDER_LIMIT) {
-    status.innerHTML =
-      `Showing ${RENDER_LIMIT}/${filtered.length} results ` +
-      `<span class="warn">(refine filters)</span>`;
-  }
+  document.getElementById('modal-title').innerText = "Build History";
+  document.getElementById('modal-body').innerHTML = `
+    <div class="overflow-auto">
+      <table class="min-w-[900px] w-full text-left text-xs md:text-sm border border-slate-700">
+        <thead class="bg-slate-800 text-slate-400">
+          <tr>
+            <th class="p-2">ID</th>
+            <th class="p-2">Time</th>
+            <th class="p-2">Branch</th>
+            <th class="p-2">Commit</th>
+            <th class="p-2">Actor</th>
+            <th class="p-2">OS/Arch</th>
+            <th class="p-2">Archive</th>
+            <th class="p-2">Details</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+  document.getElementById('modal').classList.remove('hidden');
+  document.getElementById('modal').classList.add('flex');
 }
 
-fetchArtifacts();
+function showBuildDetail(b){
+  document.getElementById('modal-title').innerText = `Build ${b.id}`;
+  document.getElementById('modal-body').innerHTML =
+    `<pre class="bg-slate-900 p-3 rounded overflow-auto">${JSON.stringify(b, null, 2)}</pre>`;
+}
+
+/* ---------------- Landing ---------------- */
+
+function landing(){
+  setPage(el(`
+    <div class="grid gap-4 md:grid-cols-3">
+      ${card("Host Information", "List all registered hosts", "hostPage()")}
+      ${card("Artifact Repository", "Repositories, builds and archives", "repoPage()")}
+      ${card("Service List", "Services and runtime configuration", "servicePage()")}
+    </div>
+  `));
+}
+
+/* ---------------- Hosts ---------------- */
+
+async function hostPage(){
+  const data = await api('/deployd/host');
+
+  const rows = data.map(h => `
+    <div onclick='showHostDetail(${JSON.stringify(h)})'
+      class="bg-slate-800 border border-slate-700 rounded-lg p-4 cursor-pointer hover:border-slate-500">
+      <div class="font-semibold text-white">${h.host}</div>
+      <div class="text-xs text-slate-400">${h.os}/${h.architecture} • ${h.fqdn}</div>
+    </div>`).join("");
+
+  setPage(el(`
+    <div>
+      ${backBtn('landing()')}
+      <h2 class="text-xl md:text-2xl font-semibold mb-4">Hosts</h2>
+      <div class="space-y-3">${rows}</div>
+    </div>
+  `));
+}
+
+function showHostDetail(h){
+  document.getElementById('modal-title').innerText = `Host: ${h.host}`;
+  document.getElementById('modal-body').innerHTML = `
+    <div class="space-y-2 text-sm">
+      <div><b>Namespace:</b> ${h.namespace}</div>
+      <div><b>FQDN:</b> ${h.fqdn}</div>
+      <div><b>OS / Arch:</b> ${h.os} / ${h.architecture}</div>
+      <div><b>Replica ID:</b> ${h.raft_config.replica_id}</div>
+      <div><b>Published At:</b> ${new Date(h.published_at).toLocaleString()}</div>
+    </div>`;
+  document.getElementById('modal').classList.remove('hidden');
+  document.getElementById('modal').classList.add('flex');
+}
+
+/* ---------------- Repository ---------------- */
+
+async function repoPage(){
+  const data = await api('/artifactd/repository');
+
+  const cards = data.map(r =>
+    card(r.name, `ID: ${r.id}<br>Namespace: ${r.namespace}`, `repoDetail('${r.id}')`)
+  ).join("");
+
+  setPage(el(`
+    <div>
+      ${backBtn('landing()')}
+      <h2 class="text-xl md:text-2xl font-semibold mb-4">Repositories</h2>
+      <div class="grid gap-4">${cards}</div>
+    </div>
+  `));
+}
+
+async function repoDetail(id){
+  const builds = await api('/artifactd/build?repository=' + id);
+
+  setPage(el(`
+    <div>
+      ${backBtn('repoPage()')}
+      <h2 class="text-xl md:text-2xl font-semibold mb-6">Repository: ${id}</h2>
+      ${primaryBtn("View Builds", "bg-blue-600", `showBuildTable(${JSON.stringify(builds)})`)}
+    </div>
+  `));
+}
+
+/* ---------------- Services ---------------- */
+
+async function servicePage(){
+  const data = await api('/deployd/service');
+
+  const cards = data.map(s =>
+    card(s.name, `ID: ${s.id}<br>Namespace: ${s.namespace}`, `serviceDetail('${s.id}')`)
+  ).join("");
+
+  setPage(el(`
+    <div>
+      ${backBtn('landing()')}
+      <h2 class="text-xl md:text-2xl font-semibold mb-4">Services</h2>
+      <div class="grid gap-4">${cards}</div>
+    </div>
+  `));
+}
+
+async function serviceDetail(id){
+  const env = await api('/secretd/env?id=' + id);
+  const secret = await api('/secretd/secret?id=' + id);
+
+  setPage(el(`
+    <div>
+      ${backBtn('servicePage()')}
+      <h2 class="text-xl md:text-2xl font-semibold mb-6">Service: ${id}</h2>
+      <div class="flex gap-3 flex-wrap">
+        ${primaryBtn("View Env", "bg-green-600", `showKeyValueTable("Environment Variables", ${JSON.stringify(env)})`)}
+        ${primaryBtn("View Secrets", "bg-red-600", `showKeyValueTable("Secrets", ${JSON.stringify(secret)})`)}
+      </div>
+    </div>
+  `));
+}
+
+/* ---------------- API ---------------- */
+
+async function api(path){
+  const r = await fetch(API + path, { headers });
+  return (await r.json()).success;
+}
+
+landing();
 </script>
 </body>
 </html>
