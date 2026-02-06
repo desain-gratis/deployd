@@ -270,8 +270,8 @@ async function servicePage(){
 }
 
 async function serviceDetail(id){
-  const env = await api('/secretd/env?id=' + id);
-  const secret = await api('/secretd/secret?id=' + id);
+  const env = await api('/secretd/env?service=' + id);
+  const secret = await api('/secretd/secret?service=' + id);
 
   setPage(el(`
     <div>
