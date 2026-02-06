@@ -111,9 +111,10 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
 	ctx, err := raft_runner.RunReplica[any](
 		ctx,
 		"secretd-v1",
-		content_chraft.New(nil,
-			content_chraft.TableConfig{Name: "secretd_secret", RefSize: 0},
-			content_chraft.TableConfig{Name: "secretd_env", RefSize: 0},
+		content_chraft.New(
+			nil,
+			content_chraft.TableConfig{Name: "secretd_secret", RefSize: 1, IncrementalID: true, IncrementalIDGetLimit: 5},
+			content_chraft.TableConfig{Name: "secretd_env", RefSize: 1, IncrementalID: true, IncrementalIDGetLimit: 5},
 		),
 	)
 	if err != nil {
@@ -121,19 +122,19 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
 	}
 
 	secretStore := content_chraft.NewStorageClient(ctx, "secretd_secret")
-	secretUsecase = mycontent_base.New[*entity.Secret](secretStore, 0)
+	secretUsecase = mycontent_base.New[*entity.Secret](secretStore, 1)
 	secretHandler := mycontentapi.New(
 		secretUsecase,
 		publicBaseURL+"/secretd/secret",
-		nil,
+		[]string{"service"},
 	)
 
 	envStore := content_chraft.NewStorageClient(ctx, "secretd_env")
-	envUsecase = mycontent_base.New[*entity.Env](envStore, 0)
+	envUsecase = mycontent_base.New[*entity.Env](envStore, 1)
 	envHandler := mycontentapi.New(
 		envUsecase,
 		publicBaseURL+"/secretd/env",
-		nil,
+		[]string{"service"},
 	)
 
 	// obviously right now is not secure
@@ -333,7 +334,8 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router) {
 	ctx, err := raft_runner.RunReplica[any](
 		ctx,
 		"artifactd-v1",
-		content_chraft.New(nil,
+		content_chraft.New(
+			nil,
 			content_chraft.TableConfig{Name: "artifactd_repository", RefSize: 0},
 			content_chraft.TableConfig{Name: "artifactd_build", RefSize: 1, IncrementalID: true},
 			content_chraft.TableConfig{Name: "artifactd_archive", RefSize: 2},
