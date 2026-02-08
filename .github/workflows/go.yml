@@ -80,6 +80,6 @@ jobs:
         uses: desain-gratis/deployd-gh-action@v1
         with:
           url: http://mb1:9600
-          namespace: desain-gratis
+          namespace: deployd
           name: user-profile
           archive: deploy-artifact
