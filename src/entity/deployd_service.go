@@ -21,11 +21,15 @@ var (
 )
 
 type ServiceDefinition struct {
-	Id   string `json:"id,omitempty"`
-	Ns   string `json:"namespace"`
-	Name string `json:"name" ch:"name"`
+	Ns string `json:"namespace"`
 
-	Repository ArtifactdRepository `json:"repository"`
+	Id string `json:"id,omitempty"`
+
+	Name        string `json:"name" ch:"name"`
+	Description string `json:"description"`
+
+	Repository     ArtifactdRepository `json:"repository"`
+	ExecutablePath string              `json:"executable_path"` // todo add validation
 
 	PublishedAt time.Time `json:"published_at"`
 	URLx        string    `json:"url"`

@@ -1,0 +1,32 @@
+host:
+  name: "mb3"
+  os: linux
+  architecture: amd64
+
+raft:
+  replica_id: 3
+
+http:
+  public:
+    address: ":9600"
+    fqdn: http://localhost:9401
+
+ui:
+  dir: "/var/www"
+
+storage:
+  s3:
+    blob:
+      endpoint: minio:9000
+      key_id: <secret>
+      key_secret: <secret>
+      use_ssl: false
+      bucket_name: sewatenan-bucket
+      base_public_url: http://localhost:9000/sewatenan-bucket
+  clickhouse:
+    content:
+      address: "clickhouse-content:9000"
+      username: <secret>
+      password: <secret>
+      database: default
+      read_timeout: 2s

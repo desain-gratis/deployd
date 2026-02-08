@@ -28,7 +28,8 @@ func (h *httpHandler) StreamAll(w http.ResponseWriter, r *http.Request, p httpro
 }
 
 func NewClient(ctx context.Context) *httpHandler {
-	rctx := raft_runner.GetRaftContext(ctx)
+	rctx, _ := raft_runner.GetRaftContext(ctx) // TODO: use new pattern
+
 	sess := rctx.DHost.GetNoOPSession(rctx.ShardID)
 
 	return &httpHandler{
@@ -40,7 +41,7 @@ func NewClient(ctx context.Context) *httpHandler {
 }
 
 func Query[T any](ctx context.Context, contextKey string) (<-chan T, error) {
-	rctx := raft_runner.GetRaftContext(ctx)
+	rctx, _ := raft_runner.GetRaftContext(ctx) // TODO: use new pattern
 
 	ctx, cancel := context.WithTimeout(ctx, 4000*time.Millisecond)
 	defer cancel()

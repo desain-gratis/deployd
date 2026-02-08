@@ -13,3 +13,6 @@ build:
 
 run:
 	docker compose up
+
+configure:
+	go run ./cmd/test/configure/main.go

@@ -26,3 +26,8 @@ replica:
         id: "secretd-v1"
         alias: "secretd Microservice (POC)"
         type: "secretd"
+    4:
+        bootstrap: false
+        id: "deploy-job-v1"
+        alias: "deploy job"
+        type: "deploy-job"

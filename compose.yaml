@@ -21,6 +21,10 @@ services:
       - ./tmp/data/data-1:/data
       - ./tmp/dbus:/dbus
       - ./www:/var/www
+      - ./tmp/etc:/etc
+      - ./tmp/opt:/opt
+      - ./tmp/tmp/:/tmp
+      - ./tmp/systemd/:/etc/systemd/system/
     depends_on:
       - clickhouse-deployd1
       - mock-systemd
@@ -49,6 +53,10 @@ services:
       - ./tmp/data/data-2:/data
       - ./tmp/dbus:/dbus
       - ./www:/var/www
+      - ./tmp/etc:/etc
+      - ./tmp/opt:/opt
+      - ./tmp/tmp/:/tmp
+      - ./tmp/systemd/:/etc/systemd/system/
     depends_on:
       - clickhouse-deployd2
       - mock-systemd
@@ -77,6 +85,10 @@ services:
       - ./tmp/data/data-3:/data
       - ./tmp/dbus:/dbus
       - ./www:/var/www
+      - ./tmp/etc:/etc
+      - ./tmp/opt:/opt
+      - ./tmp/tmp/:/tmp
+      - ./tmp/systemd/:/etc/systemd/system/
     depends_on:
       - clickhouse-deployd3
       - mock-systemd

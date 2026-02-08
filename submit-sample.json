@@ -1,0 +1,12 @@
+{
+  "namespace": "deployd",
+  "service": {
+    "id": "user-profile"
+  },
+  "build_version": 0,
+  "secret_version": 0,
+  "env_version": 0,
+  "raft_config_version": 0,
+  "raft_config_replica_version": 0,
+  "is_believe": true
+}

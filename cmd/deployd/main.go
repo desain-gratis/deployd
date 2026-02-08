@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net"
 	"net/http"
@@ -19,9 +20,12 @@ import (
 	mycontent_base "github.com/desain-gratis/common/delivery/mycontent-api/mycontent/base"
 	blob_s3 "github.com/desain-gratis/common/delivery/mycontent-api/storage/blob/s3"
 	content_chraft "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/clickhouse-raft"
+	notifier_api "github.com/desain-gratis/common/lib/notifier/api"
 	notifier_impl "github.com/desain-gratis/common/lib/notifier/impl"
 	raft_runner "github.com/desain-gratis/common/lib/raft/runner"
 
+	deployjobintegration "github.com/desain-gratis/deployd/internal/src/deploy-job"
+	deployjob "github.com/desain-gratis/deployd/internal/src/raft-app/deploy-job"
 	"github.com/desain-gratis/deployd/internal/src/systemd"
 	"github.com/desain-gratis/deployd/src/deployd"
 	"github.com/desain-gratis/deployd/src/entity"
@@ -48,7 +52,26 @@ var (
 
 	// store service's secret
 	secretUsecase *mycontent_base.Handler[*entity.Secret]
+
+	jobUsecase *mycontent_base.Handler[*entity.DeploymentJob]
+
+	buildArtifactUsecase *mycontent_base.HandlerWithAttachment
+
+	// deploy job client
+	raftDeployjobUsecase *deployjob.Client
 )
+
+var currentHost = &entity.Host{
+	Ns:           "deployd",
+	Host:         mustEnv("DEPLOYD_HOSTNAME"),
+	OS:           mustEnv("DEPLOYD_OS"),
+	Architecture: mustEnv("DEPLOYD_ARCH"),
+	RaftConfig: entity.DeploydRaftConfig{
+		ReplicaID: getReplicaID(),
+	},
+	FQDN:        "com.deployd",
+	PublishedAt: time.Now(),
+}
 
 func main() {
 	ctx, cancel := context.WithCancelCause(context.Background())
@@ -74,6 +97,7 @@ func main() {
 	enableArtifactdModule(ctx, router)
 	enableDeploydModule(ctx, router)
 	enableSecretdModule(ctx, router)
+	enableJobModule(ctx, router)
 	enableUI(ctx, router)
 
 	err = initWithTestData(ctx)
@@ -105,6 +129,84 @@ func enableSystemdModule(ctx context.Context, router *httprouter.Router) {
 	httpIntegration := systemd.Http(integration)
 
 	router.GET("/ws", httpIntegration.StreamUnit)
+}
+
+func enableJobModule(ctx context.Context, router *httprouter.Router) {
+	// All event regarding job lifecycle will be published to this topic
+	jobTopic := notifier_impl.NewStandardTopic()
+
+	subscription, err := jobTopic.Subscribe(ctx, notifier_impl.NewStandardSubscriber(nil))
+	if err != nil {
+		log.Fatal().Msgf("failed to run subscribe to a topic:  %v", err)
+	}
+
+	// IMPORTANT: start often forgotten. Start before replica started to make sure no message is lost
+	subscription.Start()
+
+	ctx, err = raft_runner.RunReplica[any](
+		ctx,
+		"deploy-job-v1",
+		deployjob.New(jobTopic),
+	)
+	if err != nil {
+		log.Fatal().Msgf("failed to run deploy-job-v1 raft: %v", err)
+	}
+
+	// "ordinary" mycontent
+	jobStore := content_chraft.NewStorageClient(ctx, deployjob.TableDeploymentJob)
+	jobUsecase = mycontent_base.New[*entity.DeploymentJob](jobStore, 1)
+	jobHandler := mycontentapi.New(
+		jobUsecase,
+		publicBaseURL+"/deployd/job",
+		[]string{"service"},
+	)
+
+	// more advanced
+	rClient, err := raft_runner.NewClient(ctx)
+	if err != nil {
+		log.Fatal().Msgf("err: %v", err)
+	}
+
+	raftDeployjobUsecase = deployjob.NewClient(rClient)
+
+	integration := deployjobintegration.New(
+		ctx,
+		&deployjobintegration.Dependencies{
+			HostConfigUsecase:        hostConfigUsecase,
+			ServiceDefinitionUsecase: serviceDefinitionUsecase,
+			RepositoryUsecase:        repositoryUsecase,
+			EnvUsecase:               envUsecase,
+			SecretUsecase:            secretUsecase,
+			RaftJobUsecase:           raftDeployjobUsecase,
+			BuildArtifactUsecase:     buildArtifactUsecase,
+			JobUsecase:               jobUsecase,
+		},
+		currentHost,
+	)
+
+	router.POST("/deployd/job/submit", integration.Http.SubmitJob)
+	router.POST("/deployd/job/cancel/:service/:id", integration.Http.CancelJob)
+	router.POST("/deployd/job/confirm-deployment", integration.Http.ConfirmDeployment)
+
+	router.GET("/deployd/job", jobHandler.Get)
+	// router.DELETE("/deployd/job/cancel", jobHandler.Delete) // not exposed
+	// router.POST("/deployd/job/confirm-deployment", jobHandler.Post) // not exposed, post via job/submit
+
+	integration.Worker.StartConsumer(jobTopic, subscription)
+
+	handler := notifier_api.NewTopicAPI(jobTopic, func(v any) any {
+		switch value := v.(type) {
+		case string:
+			return value
+		default:
+			result, _ := json.Marshal(v)
+			return string(result)
+		}
+	})
+
+	router.GET("/deployd/job/tail", handler.Tail)
+	router.GET("/deployd/job/stat", handler.Metrics)
+
 }
 
 func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
@@ -240,17 +342,7 @@ func initWithTestData(
 	// Populate host config API with config from file
 	// Only this config is required. The rest are temporary for debugging
 	for {
-		_, err = hostConfigUsecase.Post(ctx, &entity.Host{
-			Ns:           "deployd",
-			Host:         mustEnv("DEPLOYD_HOSTNAME"),
-			OS:           mustEnv("DEPLOYD_OS"),
-			Architecture: mustEnv("DEPLOYD_ARCH"),
-			RaftConfig: entity.DeploydRaftConfig{
-				ReplicaID: getReplicaID(),
-			},
-			FQDN:        "com.deployd",
-			PublishedAt: time.Now(),
-		}, nil)
+		_, err = hostConfigUsecase.Post(ctx, currentHost, nil)
 		if err == nil {
 			break
 		}
@@ -271,7 +363,9 @@ func initWithTestData(
 			Ns:  "deployd",
 			ID:  "user-profile",
 		},
-		PublishedAt: time.Now(),
+		Description:    "Hello",
+		ExecutablePath: "./exec",
+		PublishedAt:    time.Now(),
 	}, nil)
 	if err != nil {
 		return err
@@ -373,14 +467,15 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router) {
 		1,
 	)
 
+	buildArtifactUsecase = mycontent_base.NewAttachment(
+		content_chraft.NewStorageClient(ctx, "artifactd_archive"),
+		2,
+		buildArtifactBlob,
+		false,
+		"artifactd/archive",
+	)
 	archiveHandler := mycontentapi.NewAttachment(
-		mycontent_base.NewAttachment(
-			content_chraft.NewStorageClient(ctx, "artifactd_archive"),
-			2,
-			buildArtifactBlob,
-			false,
-			"artifactd/archive",
-		),
+		buildArtifactUsecase,
 		publicBaseURL+"/artifactd/archive",
 		[]string{"repository", "build"},
 		"",

@@ -1,5 +1,10 @@
 host:
-  name: "internal-hostname"
+  name: "mb1"
+  os: linux
+  architecture: amd64
+
+raft:
+  replica_id: 1
 
 http:
   public:
