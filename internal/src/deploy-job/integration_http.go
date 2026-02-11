@@ -7,14 +7,18 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/desain-gratis/deployd/src/entity"
+	"github.com/desain-gratis/common/lib/notifier"
 	"github.com/julienschmidt/httprouter"
 	"github.com/rs/zerolog/log"
+
+	"github.com/desain-gratis/deployd/src/entity"
 )
 
+// HTTP interface of the deployment job
+// This one is an interface to raft as well to coordinate the job
 type httpHandler struct {
-	state        *state
-	dependencies *Dependencies
+	jobsController *jobsController
+	dependencies   *Dependencies
 }
 
 func (h *httpHandler) SubmitJob(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
@@ -130,4 +134,19 @@ func (h *httpHandler) CancelJob(w http.ResponseWriter, r *http.Request, p httpro
 
 func (h *httpHandler) ConfirmDeployment(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	fmt.Fprintf(w, "deployment confirmed")
+}
+
+func (h *httpHandler) StreamLog(topic notifier.Topic) httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		jobParam := p.ByName("active-job")
+		_, ok := h.jobsController.configureJobPool[jobParam]
+		if !ok {
+			// todo: 404 not found
+			fmt.Fprintf(w, `{"error": "active job not found"}`)
+			return
+		}
+
+		// job
+
+	}
 }

@@ -21,7 +21,17 @@ type SubmitDeploymentJobRequest struct {
 	RaftConfigVersion        uint64 `json:"raft_config_version"`
 	RaftConfigReplicaVersion uint64 `json:"raft_config_replica_version"`
 
-	ModifyKey *string `json:"-"` // hidden
+	ModifyKey *string `json:"-"` // hidden; TODO: to be nice, to lock, only the one who have this key can modify the state.
+
+	// TODO: List of hosts to deploy to
+
+	// TODO: deployment worker job script name (eg. Ubuntu), in which they will define the DAG, and will spawn a worker instances
+
+	// TODO: After worker is spawned, they may notify their instance name & HTTP address here for anyone who wants to stream its log;
+	// for more detailed, worker specific, logs.
+	// we do have update in the Raft level (this struct), but it's less detailed.
+
+	TimeoutSeconds *uint32 `json:"timeout_seconds,omitempty"`
 
 	IsBelieve   bool      `json:"is_believe"`
 	Url         string    `json:"url"`

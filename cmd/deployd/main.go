@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -189,21 +190,10 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	router.POST("/deployd/job/confirm-deployment", integration.Http.ConfirmDeployment)
 
 	router.GET("/deployd/job", jobHandler.Get)
-	// router.DELETE("/deployd/job/cancel", jobHandler.Delete) // not exposed
-	// router.POST("/deployd/job/confirm-deployment", jobHandler.Post) // not exposed, post via job/submit
 
-	integration.Worker.StartConsumer(jobTopic, subscription)
+	integration.Event.StartConsumer(jobTopic, subscription)
 
-	handler := notifier_api.NewTopicAPI(jobTopic, func(v any) any {
-		switch value := v.(type) {
-		case string:
-			return value
-		default:
-			result, _ := json.Marshal(v)
-			return string(result)
-		}
-	})
-
+	handler := notifier_api.NewTopicAPI(jobTopic, topicRender)
 	router.GET("/deployd/job/tail", handler.Tail)
 	router.GET("/deployd/job/stat", handler.Metrics)
 
@@ -567,4 +557,33 @@ func withCors(router http.Handler) http.Handler {
 		header.Set("Access-Control-Allow-Headers", "Content-Type")
 		router.ServeHTTP(w, r)
 	})
+}
+
+func topicRender(v any) any {
+	switch value := v.(type) {
+	case deployjobintegration.Log:
+		job, _ := json.Marshal(value.Job)
+
+		collect := map[string]any{
+			"state": json.RawMessage(job),
+			"level": value.Record.Level.String(),
+			"time":  value.Record.Time,
+			"msg":   value.Record.Message,
+		}
+
+		value.Record.Attrs(func(a slog.Attr) bool {
+			// TODO: more advanced value extraction later
+			collect[a.Key] = a.Value.Any()
+			return true
+		})
+
+		payload, _ := json.Marshal(collect)
+
+		log.Info().Msg(string(payload)) // TODO: remove this later (or keep it is ok)
+
+		return string(payload)
+	default:
+		result, _ := json.Marshal(v)
+		return string(result)
+	}
 }
