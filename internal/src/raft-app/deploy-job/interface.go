@@ -35,12 +35,12 @@ type ConfigurationUpdateRequest struct {
 	Id      string `json:"id"`
 	Service string `json:"service"`
 
-	HostName string                     `json:"host_name"`
-	Status   entity.DeploymentJobStatus `json:"status"`
-	Message  string                     `json:"message"`
+	HostName string               `json:"host_name"`
+	Status   entity.HostJobStatus `json:"status"`
+	Message  string               `json:"message"`
 
 	URL       string    `json:"url"`
-	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type DeployConfirmation struct {
@@ -55,14 +55,14 @@ type DeployConfirmation struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-type DeploymentUpdateRequest struct {
+type HostDeploymentUpdateRequest struct {
 	Ns      string `json:"namespace"`
 	Id      string `json:"id"`
 	Service string `json:"service"`
 
-	HostName string                     `json:"host_name"`
-	Status   entity.DeploymentJobStatus `json:"status"`
-	Message  string                     `json:"message"`
+	HostName string               `json:"host_name"`
+	Status   entity.HostJobStatus `json:"status"`
+	Message  string               `json:"message"`
 
 	URL       string    `json:"url"`
 	UpdatedAt time.Time `json:"updated_at"`

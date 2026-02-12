@@ -90,7 +90,7 @@ func (m *raftApp) OnUpdate(ctx context.Context, e raft.Entry) (raft.OnAfterApply
 		}
 		return m.userDeployConfirmation(ctx, payload)
 	case CommandHostDeploymentUpdate: // feed deployment update (sub)state update until clean up finish
-		payload, err := parseAs[DeploymentUpdateRequest](e.Value)
+		payload, err := parseAs[HostDeploymentUpdateRequest](e.Value)
 		if err != nil {
 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(e.Value))
 		}
@@ -173,32 +173,46 @@ func (m *raftApp) userCancelJob(ctx context.Context, request CancelJobRequest) (
 	return func() (raft.Result, error) { return raft.Result{Data: encResult}, nil }, nil
 }
 
+// Host configuration update
 func (m *raftApp) hostConfigurationUpdate(ctx context.Context, request ConfigurationUpdateRequest) (raft.OnAfterApply, error) {
 	jobs, err := m.jobUsecase.Get(ctx, request.Ns, []string{request.Service}, request.Id)
 	if err != nil {
 		return nil, err
 	}
 	job := jobs[0]
-	job.Status = request.Status
+
+	if job.HostState == nil {
+		job.HostState = make(map[string]entity.HostJobStatus)
+	}
+
+	job.HostState[request.HostName] = request.Status
 
 	job, err = m.jobUsecase.Post(ctx, job, nil)
 	if err != nil {
 		return nil, err
 	}
 
+	// All host configured ? :)
+	// for host, hostState := range job.HostState {
+
+	// }
+
 	encResult, err := json.Marshal(job)
 	if err != nil {
 		return nil, err
 	}
 
-	return func() (raft.Result, error) { return raft.Result{Data: encResult}, nil }, nil
+	return func() (raft.Result, error) {
+
+		return raft.Result{Data: encResult}, nil
+	}, nil
 }
 
 func (m *raftApp) userDeployConfirmation(ctx context.Context, request DeployConfirmation) (raft.OnAfterApply, error) {
 	return func() (raft.Result, error) { return raft.Result{}, nil }, errors.New("not implemented")
 }
 
-func (m *raftApp) hostDeploymentUpdate(ctx context.Context, request DeploymentUpdateRequest) (raft.OnAfterApply, error) {
+func (m *raftApp) hostDeploymentUpdate(ctx context.Context, request HostDeploymentUpdateRequest) (raft.OnAfterApply, error) {
 	return func() (raft.Result, error) { return raft.Result{}, nil }, errors.New("not implemented")
 }
 

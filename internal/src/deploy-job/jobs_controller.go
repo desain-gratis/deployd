@@ -6,10 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/desain-gratis/common/lib/notifier"
 	deployjob "github.com/desain-gratis/deployd/internal/src/raft-app/deploy-job"
 	"github.com/desain-gratis/deployd/src/entity"
-	"github.com/rs/zerolog/log"
 )
 
 type pair struct {
@@ -74,10 +75,10 @@ func (w *jobsController) startConfigureJob(out notifier.Topic, jobDefinition ent
 		Id:        jobDefinition.Id,
 		Service:   jobDefinition.Request.Service.Id,
 		HostName:  w.host.Host,
-		Status:    entity.DeploymentJobStatusConfiguring,
+		Status:    entity.HostJobStatusConfiguring,
 		Message:   "Configurating and installing",
 		URL:       "", // specific
-		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	})
 	if err != nil {
 		job.Status = StatusFailed
@@ -86,23 +87,23 @@ func (w *jobsController) startConfigureJob(out notifier.Topic, jobDefinition ent
 	}
 
 	go func() {
-		jobResult := entity.DeploymentJobStatusFailed
+		jobResult := entity.HostJobStatusConfigured
 
 		job.Execute(ctx)
 
-		switch job.GetStatus() {
+		switch job.GetStatus() { // local status
 		case StatusSuccess:
-			jobResult = entity.DeploymentJobStatusConfigured
+			jobResult = entity.HostJobStatusConfigured
 		case StatusFailed:
-			jobResult = entity.DeploymentJobStatusFailed
+			jobResult = entity.HostJobStatusConfigureFailed
 		case StatusCancelled:
-			jobResult = entity.DeploymentJobStatusCancelled
+			jobResult = entity.HostJobStatusConfigureCancelled
 		default:
-			jobResult = entity.DeploymentJobStatusInvalid
+			jobResult = entity.HostJobStatusConfigureInvalid
 		}
 
 		// Report back to job manager (raft)
-		err = w.dependencies.RaftJobUsecase.FeedDeploymentUpdate(ctx, deployjob.DeploymentUpdateRequest{
+		err = w.dependencies.RaftJobUsecase.FeedHostConfigurationUpdate(ctx, deployjob.ConfigurationUpdateRequest{
 			Ns:        jobDefinition.Ns,
 			Id:        jobDefinition.Id,
 			Service:   jobDefinition.Request.Service.Id,

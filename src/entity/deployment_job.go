@@ -6,7 +6,10 @@ import (
 	"github.com/desain-gratis/common/delivery/mycontent-api/mycontent"
 )
 
-type DeploymentJobStatus string
+type (
+	DeploymentJobStatus string
+	HostJobStatus       string
+)
 
 const (
 	// Initial spawned
@@ -37,6 +40,18 @@ const (
 	DeploymentJobStatusFailed DeploymentJobStatus = "FAILED"
 )
 
+const (
+	HostJobStatusConfiguring HostJobStatus = "CONFIGURING"
+
+	HostJobStatusConfigured HostJobStatus = "CONFIGURED"
+
+	HostJobStatusConfigureFailed HostJobStatus = "CONFIGURE_FAILED"
+
+	HostJobStatusConfigureCancelled HostJobStatus = "CONFIGURE_CANCELLED"
+
+	HostJobStatusConfigureInvalid HostJobStatus = "CONFIGURE_INVALID"
+)
+
 type DeploymentJob struct {
 	Ns     string              `json:"namespace"`
 	Status DeploymentJobStatus `json:"status"`
@@ -46,6 +61,8 @@ type DeploymentJob struct {
 	// (non-permanent should be on the raft app / on memory)
 
 	Request SubmitDeploymentJobRequest `json:"request"`
+
+	HostState map[string]HostJobStatus `json:"host_state"`
 
 	Url         string    `json:"url"`
 	PublishedAt time.Time `json:"published_at"`

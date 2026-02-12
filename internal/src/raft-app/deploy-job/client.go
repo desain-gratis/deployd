@@ -77,7 +77,7 @@ func (c *Client) ConfirmDeployment(ctx context.Context, request DeployConfirmati
 	return nil
 }
 
-func (c *Client) FeedDeploymentUpdate(ctx context.Context, request DeploymentUpdateRequest) error {
+func (c *Client) FeedDeploymentUpdate(ctx context.Context, request HostDeploymentUpdateRequest) error {
 	_, value, err := c.Publish(ctx, CommandHostConfigurationUpdate, request)
 	if err != nil {
 		_ = value
