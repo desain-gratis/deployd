@@ -65,5 +65,5 @@ type DeploymentUpdateRequest struct {
 	Message  string                     `json:"message"`
 
 	URL       string    `json:"url"`
-	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }

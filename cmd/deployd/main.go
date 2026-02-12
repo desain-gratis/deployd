@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -100,9 +101,9 @@ func main() {
 	enableJobModule(ctx, router)
 	enableUI(ctx, router)
 
-	err = initWithTestData(ctx)
+	err = initHostInformation(ctx)
 	if err != nil {
-		log.Err(err).Msgf("failed to initialize starting data in deployd")
+		log.Err(err).Msgf("failed to initialize host in deployd")
 	}
 
 	// update host config first
@@ -116,6 +117,26 @@ func main() {
 	cancel(errors.New("server closed"))
 	wg.Wait()
 	log.Info().Msgf("Bye bye")
+}
+
+func initHostInformation(ctx context.Context) error {
+	var err error
+
+	// Populate host config API with config from file
+	// Only this config is required. The rest are temporary for debugging
+	for {
+		_, err = hostConfigUsecase.Post(ctx, currentHost, nil)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, content_chraft.ErrNotReady) {
+			return err
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+
+	return nil
 }
 
 func enableUI(_ context.Context, router *httprouter.Router) {
@@ -189,21 +210,10 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	router.POST("/deployd/job/confirm-deployment", integration.Http.ConfirmDeployment)
 
 	router.GET("/deployd/job", jobHandler.Get)
-	// router.DELETE("/deployd/job/cancel", jobHandler.Delete) // not exposed
-	// router.POST("/deployd/job/confirm-deployment", jobHandler.Post) // not exposed, post via job/submit
 
-	integration.Worker.StartConsumer(jobTopic, subscription)
+	integration.Event.StartConsumer(jobTopic, subscription)
 
-	handler := notifier_api.NewTopicAPI(jobTopic, func(v any) any {
-		switch value := v.(type) {
-		case string:
-			return value
-		default:
-			result, _ := json.Marshal(v)
-			return string(result)
-		}
-	})
-
+	handler := notifier_api.NewTopicAPI(jobTopic, topicRender)
 	router.GET("/deployd/job/tail", handler.Tail)
 	router.GET("/deployd/job/stat", handler.Metrics)
 
@@ -332,93 +342,6 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 	router.POST("/deployd/raft/host", raftHostHandler.Post)
 	router.GET("/deployd/raft/host", raftHostHandler.Get)
 	router.DELETE("/deployd/raft/host", raftHostHandler.Delete)
-}
-
-func initWithTestData(
-	ctx context.Context,
-) error {
-	var err error
-
-	// Populate host config API with config from file
-	// Only this config is required. The rest are temporary for debugging
-	for {
-		_, err = hostConfigUsecase.Post(ctx, currentHost, nil)
-		if err == nil {
-			break
-		}
-		if !errors.Is(err, content_chraft.ErrNotReady) {
-			return err
-		}
-
-		time.Sleep(1 * time.Second)
-	}
-
-	// init with one service (a "user-profile" simple app)
-	_, err = serviceDefinitionUsecase.Post(ctx, &entity.ServiceDefinition{
-		Ns:   "deployd",
-		Id:   "user-profile",
-		Name: "DG User Profile Service",
-		Repository: entity.ArtifactdRepository{
-			URL: "",
-			Ns:  "deployd",
-			ID:  "user-profile",
-		},
-		Description:    "Hello",
-		ExecutablePath: "./exec",
-		PublishedAt:    time.Now(),
-	}, nil)
-	if err != nil {
-		return err
-	}
-
-	// init with one repository (a "user-profile" simple app)
-	_, err = repositoryUsecase.Post(ctx, &entity.Repository{
-		Ns:          "deployd",
-		Id:          "user-profile",
-		Name:        "DG User Profile Repository",
-		Source:      "https://github.com/desain-gratis/common",
-		URLx:        "",
-		PublishedAt: time.Now(),
-	}, nil)
-	if err != nil {
-		return err
-	}
-
-	// init with one repository (a "user-profile" simple app)
-	_, err = envUsecase.Post(ctx, &entity.Env{
-		KV: entity.KV{
-			Ns:      "deployd",
-			Service: "user-profile",
-			Value: map[string]string{
-				"MESSAGE":           "Hello from deployd 👋👋👋",
-				"DEPLOYD_RAFT_PORT": "9966",
-			},
-			PublishedAt: time.Now(),
-		},
-	}, nil)
-	if err != nil {
-		return err
-	}
-
-	check := &entity.Secret{
-		KV: entity.KV{
-			Ns:      "deployd",
-			Service: "user-profile",
-			Value: map[string]string{
-				"signing-key": "obviously-not S0 s3Cure secret!",
-				"api1.secret": "secret for api1",
-				"api1.id":     "id for api1",
-			},
-			PublishedAt: time.Now(),
-		},
-	}
-	// init with one repository (a "user-profile" simple app)
-	_, err = secretUsecase.Post(ctx, check, nil)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // enableArtifactDienableArtifactdModulescoveryModule enables upload artifact discovery / metadata query
@@ -567,4 +490,33 @@ func withCors(router http.Handler) http.Handler {
 		header.Set("Access-Control-Allow-Headers", "Content-Type")
 		router.ServeHTTP(w, r)
 	})
+}
+
+func topicRender(v any) any {
+	switch value := v.(type) {
+	case deployjobintegration.Log:
+		job, _ := json.Marshal(value.Job)
+
+		collect := map[string]any{
+			"state": json.RawMessage(job),
+			"level": value.Record.Level.String(),
+			"time":  value.Record.Time,
+			"msg":   value.Record.Message,
+		}
+
+		value.Record.Attrs(func(a slog.Attr) bool {
+			// TODO: more advanced value extraction later
+			collect[a.Key] = a.Value.Any()
+			return true
+		})
+
+		payload, _ := json.Marshal(collect)
+
+		log.Info().Msg(string(payload)) // TODO: remove this later (or keep it is ok)
+
+		return string(payload)
+	default:
+		result, _ := json.Marshal(v)
+		return string(result)
+	}
 }

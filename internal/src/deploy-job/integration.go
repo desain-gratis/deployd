@@ -4,8 +4,9 @@ import (
 	"context"
 
 	mycontent_base "github.com/desain-gratis/common/delivery/mycontent-api/mycontent/base"
-	deployjob "github.com/desain-gratis/deployd/internal/src/raft-app/deploy-job"
 	"github.com/desain-gratis/deployd/src/entity"
+
+	deployjob "github.com/desain-gratis/deployd/internal/src/raft-app/deploy-job"
 )
 
 // Dependencies in the integration side (not inside raft)
@@ -34,21 +35,21 @@ type Dependencies struct {
 	RaftJobUsecase *deployjob.Client
 }
 
+// or interface
 type integration struct {
-	state  *state
-	Http   *httpHandler
-	Worker *worker
+	// Http interface for the whole deployment jobs
+	Http *httpHandler
+
+	// In process interface exposed for consuming events;
+	Event *eventHandler
 }
 
 func New(ctx context.Context, deps *Dependencies, host *entity.Host) *integration {
-	st := &state{activeJobs: make(map[string]*activeJob), host: host}
+	jobsController := &jobsController{dependencies: deps, host: host, configureJobPool: make(map[string]*pair)}
 
 	i := &integration{
-		// "user" interface / receive user command, webhook, etcs..
-		Http: &httpHandler{state: st, dependencies: deps},
-
-		// "program" interface; job status update here
-		Worker: &worker{state: st, dependencies: deps, host: host},
+		Http:  &httpHandler{jobsController: jobsController, dependencies: deps},
+		Event: &eventHandler{jobsController: jobsController, dependencies: deps},
 	}
 
 	return i

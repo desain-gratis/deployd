@@ -9,8 +9,10 @@ import (
 type DeploymentJobStatus string
 
 const (
+	// Initial spawned
 	DeploymentJobStatusQueued DeploymentJobStatus = "QUEUED"
 
+	// Start configuring
 	DeploymentJobStatusConfiguring DeploymentJobStatus = "CONFIGURING"
 
 	// All host
@@ -27,6 +29,9 @@ const (
 
 	// Cancelled
 	DeploymentJobStatusCancelled DeploymentJobStatus = "CANCELLED"
+
+	// Invalid
+	DeploymentJobStatusInvalid DeploymentJobStatus = "INVALID"
 
 	// Failed
 	DeploymentJobStatusFailed DeploymentJobStatus = "FAILED"
