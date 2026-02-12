@@ -63,9 +63,9 @@ func useConfig() error {
 
 func useDeployd(deploydAPI, auth, namespace, host, service string) error {
 
-	hostConfigClient := mycontentapiclient.New[*entity.Host](http.DefaultClient, deploydAPI+"/deployd/host", nil)
-	raftHostConfigClient := mycontentapiclient.New[*entity.RaftHost](http.DefaultClient, deploydAPI+"/deployd/raft/host", []string{"service"})
-	raftReplicaConfigClient := mycontentapiclient.New[*entity.RaftReplica](http.DefaultClient, deploydAPI+"/deployd/raft/replica", []string{"service"})
+	hostConfigClient := mycontentapiclient.New[*entity.Host](http.DefaultClient, deploydAPI+"/deployd/host", nil, auth)
+	raftHostConfigClient := mycontentapiclient.New[*entity.RaftHost](http.DefaultClient, deploydAPI+"/deployd/raft/host", []string{"service"}, auth)
+	raftReplicaConfigClient := mycontentapiclient.New[*entity.RaftReplica](http.DefaultClient, deploydAPI+"/deployd/raft/replica", []string{"service"}, auth)
 
 	ctx := context.Background()
 
@@ -73,9 +73,9 @@ func useDeployd(deploydAPI, auth, namespace, host, service string) error {
 
 	var hostConfig entity.Host
 
-	hostConfigs, errAPI := hostConfigClient.Get(ctx, auth, namespace, nil, host)
-	if errAPI != nil {
-		return fmt.Errorf("deployd API (host config): %v", errAPI.Errors[0].Message)
+	hostConfigs, err := hostConfigClient.Get(ctx, namespace, nil, host)
+	if err != nil {
+		return fmt.Errorf("deployd API (host config): %v", err)
 	}
 	if len(hostConfigs) == 0 {
 		return fmt.Errorf("deployd API  (host config): empty configuration")
@@ -86,17 +86,17 @@ func useDeployd(deploydAPI, auth, namespace, host, service string) error {
 
 	// raftReplicaConfig := generateDefaultReplicaConfig()
 	//
-	raftHostConfigs, errAPI := raftHostConfigClient.Get(ctx, auth, namespace, nil, service)
-	if errAPI != nil {
-		return fmt.Errorf("deployd API (raft host config): %v", errAPI.Errors[0].Message)
+	raftHostConfigs, err := raftHostConfigClient.Get(ctx, namespace, nil, service)
+	if err != nil {
+		return fmt.Errorf("deployd API (raft host config): %v", err)
 	}
 	if len(raftHostConfigs) == 0 {
 		return fmt.Errorf("deployd API (raft host config): empty configuration")
 	}
 
-	raftReplicaConfigs, errAPI := raftReplicaConfigClient.Get(ctx, auth, namespace, nil, service)
-	if errAPI != nil {
-		return fmt.Errorf("deployd API (raft replica config): %v", errAPI.Errors[0].Message)
+	raftReplicaConfigs, err := raftReplicaConfigClient.Get(ctx, namespace, nil, service)
+	if err != nil {
+		return fmt.Errorf("deployd API (raft replica config): %v", err)
 	}
 	if len(raftReplicaConfigs) == 0 {
 		return fmt.Errorf("deployd API (raft replica config): empty configuration")
@@ -175,9 +175,9 @@ func configureReplica(
 	replica map[uint64]entity.ReplicaConfig,
 	raftHostConfigUrl string,
 ) error {
-	raftReplicaClient := mycontentapiclient.New[*entity.RaftReplica](http.DefaultClient, raftHostConfigUrl, []string{"id"})
+	raftReplicaClient := mycontentapiclient.New[*entity.RaftReplica](http.DefaultClient, raftHostConfigUrl, []string{"id"}, auth)
 
-	remoteReplicaConfig, err := raftReplicaClient.Get(ctx, auth, namespace, nil, serviceID)
+	remoteReplicaConfig, err := raftReplicaClient.Get(ctx, namespace, nil, serviceID)
 	if err != nil {
 		return err
 	}
@@ -193,9 +193,9 @@ func configureReplica(
 
 	if needSync {
 		// bake the cnofig:
-		_, err := raftReplicaClient.Post(ctx, auth, &entity.RaftReplica{
+		_, err := raftReplicaClient.Post(ctx, &entity.RaftReplica{
 			// TODO:
-		})
+		}, nil)
 		if err != nil {
 			return err
 		}

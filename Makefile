@@ -15,4 +15,4 @@ run:
 	docker compose up
 
 configure:
-	go run ./cmd/test/configure/main.go
+	go run ./cmd/test/configure/*.go

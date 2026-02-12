@@ -101,9 +101,9 @@ func main() {
 	enableJobModule(ctx, router)
 	enableUI(ctx, router)
 
-	err = initWithTestData(ctx)
+	err = initHostInformation(ctx)
 	if err != nil {
-		log.Err(err).Msgf("failed to initialize starting data in deployd")
+		log.Err(err).Msgf("failed to initialize host in deployd")
 	}
 
 	// update host config first
@@ -117,6 +117,26 @@ func main() {
 	cancel(errors.New("server closed"))
 	wg.Wait()
 	log.Info().Msgf("Bye bye")
+}
+
+func initHostInformation(ctx context.Context) error {
+	var err error
+
+	// Populate host config API with config from file
+	// Only this config is required. The rest are temporary for debugging
+	for {
+		_, err = hostConfigUsecase.Post(ctx, currentHost, nil)
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, content_chraft.ErrNotReady) {
+			return err
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+
+	return nil
 }
 
 func enableUI(_ context.Context, router *httprouter.Router) {
@@ -322,93 +342,6 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 	router.POST("/deployd/raft/host", raftHostHandler.Post)
 	router.GET("/deployd/raft/host", raftHostHandler.Get)
 	router.DELETE("/deployd/raft/host", raftHostHandler.Delete)
-}
-
-func initWithTestData(
-	ctx context.Context,
-) error {
-	var err error
-
-	// Populate host config API with config from file
-	// Only this config is required. The rest are temporary for debugging
-	for {
-		_, err = hostConfigUsecase.Post(ctx, currentHost, nil)
-		if err == nil {
-			break
-		}
-		if !errors.Is(err, content_chraft.ErrNotReady) {
-			return err
-		}
-
-		time.Sleep(1 * time.Second)
-	}
-
-	// init with one service (a "user-profile" simple app)
-	_, err = serviceDefinitionUsecase.Post(ctx, &entity.ServiceDefinition{
-		Ns:   "deployd",
-		Id:   "user-profile",
-		Name: "DG User Profile Service",
-		Repository: entity.ArtifactdRepository{
-			URL: "",
-			Ns:  "deployd",
-			ID:  "user-profile",
-		},
-		Description:    "Hello",
-		ExecutablePath: "./exec",
-		PublishedAt:    time.Now(),
-	}, nil)
-	if err != nil {
-		return err
-	}
-
-	// init with one repository (a "user-profile" simple app)
-	_, err = repositoryUsecase.Post(ctx, &entity.Repository{
-		Ns:          "deployd",
-		Id:          "user-profile",
-		Name:        "DG User Profile Repository",
-		Source:      "https://github.com/desain-gratis/common",
-		URLx:        "",
-		PublishedAt: time.Now(),
-	}, nil)
-	if err != nil {
-		return err
-	}
-
-	// init with one repository (a "user-profile" simple app)
-	_, err = envUsecase.Post(ctx, &entity.Env{
-		KV: entity.KV{
-			Ns:      "deployd",
-			Service: "user-profile",
-			Value: map[string]string{
-				"MESSAGE":           "Hello from deployd 👋👋👋",
-				"DEPLOYD_RAFT_PORT": "9966",
-			},
-			PublishedAt: time.Now(),
-		},
-	}, nil)
-	if err != nil {
-		return err
-	}
-
-	check := &entity.Secret{
-		KV: entity.KV{
-			Ns:      "deployd",
-			Service: "user-profile",
-			Value: map[string]string{
-				"signing-key": "obviously-not S0 s3Cure secret!",
-				"api1.secret": "secret for api1",
-				"api1.id":     "id for api1",
-			},
-			PublishedAt: time.Now(),
-		},
-	}
-	// init with one repository (a "user-profile" simple app)
-	_, err = secretUsecase.Post(ctx, check, nil)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // enableArtifactDienableArtifactdModulescoveryModule enables upload artifact discovery / metadata query
