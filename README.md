@@ -4,17 +4,17 @@ deploy golang service as ubuntu systemd service
 
 Test deploy
 
-TODO:
-	// Temporary configuration for testing
+// TODO: node selection at first job deployment; and then save the selection for subsequent deploy
+// save the target deployment host (odd number; 3 or 5)
+// determince which is the "leader" (for raft aware app ofcourse)
 
-	// Initialize (1) service definition
-	// Initialize (2) artifactd repository
-	// Initialize (3) sample overwrite env
-	// Initialize (4) sample overwrite secret
+// mutable accross many deployment (eg. shared state each deployment job); for job manager; one service -> one service "stateinstance"; 
+// the one that can be modified by user is "service definition"; the one we're talking is the "service instance" with 1 to 1 relationship.
 
-	// Create endpoint /deployd/configure (jobs)
-	// Create endpoint to trigger configuration, that copy and validates the configuration;
-	//  submit it to raft;
-	// executed all by nodes
+// app can propose (eg. to publish raft nodehost port), via job manager of course
 
-update TO DO daily in README.md to trigger deployment.
+// Job manager also can have this storage:
+ - host - available port mapping;
+ - service -> port used mapping;
+
+// Job manager may also use this for healthcheck etc.
