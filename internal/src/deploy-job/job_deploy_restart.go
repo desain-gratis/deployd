@@ -78,6 +78,15 @@ func Deploy(ctx context.Context, cfg DeployConfig) error {
 		return fmt.Errorf("binary not found: %s", binaryPath)
 	}
 
+	// Ensure owner execute bit (chmod u+x)
+	mode := info.Mode()
+	if mode&0100 == 0 { // owner execute not set
+		newMode := mode | 0100
+		if err := os.Chmod(binaryPath, newMode); err != nil {
+			return fmt.Errorf("failed to chmod u+x on %s: %w", binaryPath, err)
+		}
+	}
+
 	// 3️⃣ Connect to systemd
 	conn, err := dbus.NewSystemConnectionContext(ctx)
 	if err != nil {
