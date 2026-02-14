@@ -11,6 +11,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 	"github.com/rs/zerolog/log"
 
+	deployjob "github.com/desain-gratis/deployd/internal/src/raft-app/deploy-job"
 	"github.com/desain-gratis/deployd/src/entity"
 )
 
@@ -90,7 +91,12 @@ func (h *httpHandler) SubmitJob(w http.ResponseWriter, r *http.Request, p httpro
 		return
 	}
 
-	fmt.Fprintf(w, `{"success": "job submitted with id: %v"}`, result.Id)
+	// TODO: handle error based on status
+	if result.SubmitJobStatus == deployjob.SubmitJobStatusNeedRetry {
+		// TODO: need retry!!!
+	}
+
+	fmt.Fprintf(w, `{"success": "job submitted with id: %v (%v)"}`, result.Job.Id, result.SubmitJobStatus)
 }
 
 func (h *httpHandler) CancelJob(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
@@ -139,7 +145,7 @@ func (h *httpHandler) ConfirmDeployment(w http.ResponseWriter, r *http.Request, 
 func (h *httpHandler) StreamLog(topic notifier.Topic) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		jobParam := p.ByName("active-job")
-		_, ok := h.jobsController.configureJobPool[jobParam]
+		_, ok := h.jobsController.deploymentJobPool[jobParam]
 		if !ok {
 			// todo: 404 not found
 			fmt.Fprintf(w, `{"error": "active job not found"}`)

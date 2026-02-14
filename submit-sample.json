@@ -8,5 +8,32 @@
   "env_version": 0,
   "raft_config_version": 0,
   "raft_config_replica_version": 0,
+  "target_hosts": [
+    {
+      "host": "deployd1",
+      "raft_config": {
+        "replica_id": 1,
+        "wal_dir": "/data",
+        "node_host_dir": "/data"
+      }
+    },
+    {
+      "host": "deployd2",
+      "raft_config": {
+        "replica_id": 2,
+        "wal_dir": "/data",
+        "node_host_dir": "/data"
+      }
+    },
+    {
+      "host": "deployd3",
+      "raft_config": {
+        "replica_id": 3,
+        "wal_dir": "/data",
+        "node_host_dir": "/data"
+      }
+    }
+  ],
+  "timeout_seconds": 900,
   "is_believe": true
 }

@@ -6,19 +6,28 @@ import (
 	"github.com/desain-gratis/deployd/src/entity"
 )
 
-type EventDeploymentJobCreated struct {
-	Job entity.DeploymentJob
-	// can add event messages.. etc..
-}
+type (
+	EventDeploymentJobCreated SubmitJobResponse
 
-type EventDeploymentJobCancelled struct {
-	Job entity.DeploymentJob
-	// can add other event messages..
-}
+	EventAllHostConfigured ConfigurationUpdateResponse
+	EventHostConfigured    ConfigurationUpdateResponse
+
+	EventServiceRestarted    HostRestartServiceUpdateResponse
+	EventAllServiceRestarted HostRestartServiceUpdateResponse
+	EventDeploymentFailed    HostRestartServiceUpdateResponse
+
+	// Lets go deploy
+	EventRestartConfirmed HostRestartConfirmationResponse
+
+	EventDeploymentJobCancelled struct {
+		Job entity.DeploymentJob
+		// can add other event messages..
+	}
+)
 
 type CancelJobRequest struct {
 	Ns      string `json:"namespace"`
-	Id      string `json:"id"`
+	JobId   string `json:"job_id"`
 	Service string `json:"service"`
 
 	Reason string `json:"reason"`
@@ -32,37 +41,65 @@ type CancelJobRequest struct {
 
 type ConfigurationUpdateRequest struct {
 	Ns      string `json:"namespace"`
-	Id      string `json:"id"`
+	JobId   string `json:"job_id"`
 	Service string `json:"service"`
 
-	HostName string               `json:"host_name"`
-	Status   entity.HostJobStatus `json:"status"`
-	Message  string               `json:"message"`
+	HostName     string                         `json:"host_name"`
+	Status       entity.HostConfigurationStatus `json:"status"`
+	ErrorMessage *string                        `json:"error_message,omitempty"`
 
 	URL       string    `json:"url"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-type DeployConfirmation struct {
+type ConfigurationUpdateResponse struct {
+	ConfirmImmediately bool                  `json:"confirm_immediately"`
+	TriggerHost        string                `json:"trigger_host"`
+	Job                *entity.DeploymentJob `json:"job"`
+}
+
+type RestartConfirmation struct {
 	Ns      string `json:"namespace"`
-	Id      string `json:"id"`
+	JobId   string `json:"job_id"`
 	Service string `json:"service"`
 
-	Status  string `json:"status"`
-	Message string `json:"string"`
+	Host    string `json:"host"`
+	Message string `json:"message"`
+
+	Agent string `json:"agent"` // who confirm it
 
 	URL       string    `json:"url"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
-type HostDeploymentUpdateRequest struct {
+type HostRestartServiceUpdateResponse struct {
+	Step              int                  `json:"current_step"`
+	TargetHost        string               `json:"target_host"`
+	Job               entity.DeploymentJob `json:"job"`
+	TriggerHost       string               `json:"trigger_host"`
+	DeployImmediately bool                 `json:"deploy_immediately"`
+	Failed            bool                 `json:"failed"`
+	FailReason        *string              `json:"fail_reason,omitempty"`
+}
+
+type HostRestartConfirmationResponse struct {
+	Step        int                  `json:"current_step"`
+	TargetHost  string               `json:"target_host"`
+	Job         entity.DeploymentJob `json:"job"`
+	TriggerHost string               `json:"trigger_host"`
+	Message     string               `json:"message"`
+}
+
+type HostRestartServiceUpdateRequest struct {
 	Ns      string `json:"namespace"`
-	Id      string `json:"id"`
+	JobId   string `json:"job_id"`
 	Service string `json:"service"`
 
-	HostName string               `json:"host_name"`
-	Status   entity.HostJobStatus `json:"status"`
-	Message  string               `json:"message"`
+	HostName     string                      `json:"host_name"`
+	Status       entity.HostDeploymentStatus `json:"status"`
+	ErrorMessage *string                     `json:"message,omitempty"`
+
+	Order *int `json:"order"`
 
 	URL       string    `json:"url"`
 	UpdatedAt time.Time `json:"updated_at"`

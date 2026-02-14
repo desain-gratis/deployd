@@ -13,7 +13,7 @@ type CancelJobRequest struct {
 type SubmitDeploymentJobRequest struct {
 	Ns      string            `json:"namespace"`
 	Service ServiceDefinition `json:"service"`
-	Id      string            `json:"string"`
+	Id      string            `json:"id"`
 
 	BuildVersion             uint64 `json:"build_version"`
 	SecretVersion            uint64 `json:"secret_version"`
@@ -23,7 +23,10 @@ type SubmitDeploymentJobRequest struct {
 
 	ModifyKey *string `json:"-"` // hidden; TODO: to be nice, to lock, only the one who have this key can modify the state.
 
-	// TODO: List of hosts to deploy to
+	// TODO: List of hosts to deploy to; for first time deployment
+	TargetHosts []*Host `json:"target_hosts,omitempty"`
+
+	// TODO: cloudflared configuration
 
 	// TODO: deployment worker job script name (eg. Ubuntu), in which they will define the DAG, and will spawn a worker instances
 

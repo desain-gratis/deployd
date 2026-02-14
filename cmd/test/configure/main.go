@@ -43,7 +43,7 @@ func main() {
 		URLx:         "",
 		Name:         "user-profile",
 		Archive: []*common_entity.File{
-			{Id: "linux/amd64", Url: "test.tar.gz"},
+			{Id: "linux/amd64", Url: "user-profile.tar.gz"},
 		},
 	}}
 
@@ -95,8 +95,11 @@ func initWithTestData(
 			ID:  "user-profile",
 		},
 		Description:    "Hello",
-		ExecutablePath: "./exec",
-		PublishedAt:    time.Now(),
+		ExecutablePath: "./user-profile",
+		BoundAddresses: []entity.BoundAddress{
+			{Host: "localhost", Port: 10001},
+		},
+		PublishedAt: time.Now(),
 	}, nil)
 	if err != nil {
 		return err

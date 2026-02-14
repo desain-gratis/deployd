@@ -2,6 +2,8 @@ package deployjob
 
 import (
 	"context"
+	"log/slog"
+	"os"
 
 	mycontent_base "github.com/desain-gratis/common/delivery/mycontent-api/mycontent/base"
 	"github.com/desain-gratis/deployd/src/entity"
@@ -16,6 +18,9 @@ type Dependencies struct {
 
 	// service configuration (to be installed on the host)
 	ServiceDefinitionUsecase *mycontent_base.Handler[*entity.ServiceDefinition]
+
+	// service instance for each host
+	ServiceDeploymentUsecase *mycontent_base.Handler[*entity.ServiceInstanceHost]
 
 	// archive / artifact repository storing build & archive information
 	RepositoryUsecase *mycontent_base.Handler[*entity.Repository]
@@ -45,7 +50,14 @@ type integration struct {
 }
 
 func New(ctx context.Context, deps *Dependencies, host *entity.Host) *integration {
-	jobsController := &jobsController{dependencies: deps, host: host, configureJobPool: make(map[string]*pair)}
+	jobsController := &jobsController{
+		dependencies:      deps,
+		host:              host,
+		deploymentJobPool: make(map[string]*deploymentJob),
+		log: slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{})).
+			With("type", "controller").
+			With("job", "deployment-controller"),
+	}
 
 	i := &integration{
 		Http:  &httpHandler{jobsController: jobsController, dependencies: deps},

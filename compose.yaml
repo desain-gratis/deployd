@@ -18,16 +18,16 @@ services:
     volumes:
       - ./config/deployd:/etc/deployd
       - ./config/deployd/raft/config-1.yaml:/etc/dragonboat.yaml
-      - ./tmp/data/data-1:/data
-      - ./tmp/dbus:/dbus
       - ./www:/var/www
-      - ./tmp/etc:/etc
-      - ./tmp/opt:/opt
-      - ./tmp/tmp/:/tmp
-      - ./tmp/systemd/:/etc/systemd/system/
+      - ./tmp1/data/data-1:/data
+      - ./tmp1/dbus:/dbus
+      - ./tmp1/etc:/etc
+      - ./tmp1/opt:/opt
+      - ./tmp1/tmp/:/tmp
+      - ./tmp1/systemd/:/etc/systemd/system/
     depends_on:
       - clickhouse-deployd1
-      - mock-systemd
+      - mock-systemd1
     networks:
       - docker-dev_appnet
     command: ["./deployd"]
@@ -50,16 +50,16 @@ services:
     volumes:
       - ./config/deployd:/etc/deployd
       - ./config/deployd/raft/config-2.yaml:/etc/dragonboat.yaml
-      - ./tmp/data/data-2:/data
-      - ./tmp/dbus:/dbus
       - ./www:/var/www
-      - ./tmp/etc:/etc
-      - ./tmp/opt:/opt
-      - ./tmp/tmp/:/tmp
-      - ./tmp/systemd/:/etc/systemd/system/
+      - ./tmp2/data/data-2:/data
+      - ./tmp2/dbus:/dbus
+      - ./tmp2/etc:/etc
+      - ./tmp2/opt:/opt
+      - ./tmp2/tmp/:/tmp
+      - ./tmp2/systemd/:/etc/systemd/system/
     depends_on:
       - clickhouse-deployd2
-      - mock-systemd
+      - mock-systemd2
     networks:
       - docker-dev_appnet
     command: ["./deployd"]
@@ -82,16 +82,16 @@ services:
     volumes:
       - ./config/deployd:/etc/deployd
       - ./config/deployd/raft/config-3.yaml:/etc/dragonboat.yaml
-      - ./tmp/data/data-3:/data
-      - ./tmp/dbus:/dbus
       - ./www:/var/www
-      - ./tmp/etc:/etc
-      - ./tmp/opt:/opt
-      - ./tmp/tmp/:/tmp
-      - ./tmp/systemd/:/etc/systemd/system/
+      - ./tmp3/data/data-3:/data
+      - ./tmp3/dbus:/dbus
+      - ./tmp3/etc:/etc
+      - ./tmp3/opt:/opt
+      - ./tmp3/tmp/:/tmp
+      - ./tmp3/systemd/:/etc/systemd/system/
     depends_on:
       - clickhouse-deployd3
-      - mock-systemd
+      - mock-systemd3
     networks:
       - docker-dev_appnet
     command: ["./deployd"]
@@ -200,12 +200,12 @@ services:
         reservations:
           memory: 1G
 
-  mock-systemd:
+  mock-systemd1:
     image: ghcr.io/balena-os/mock-systemd-bus@sha256:79b92200fb6481edfea9776a75d6bf3fd8583b79b7e83868f49ba7b295f397ce
     # Necessary to run systemd in a container
     privileged: true
     volumes:
-      - ./tmp/dbus:/shared/dbus
+      - ./tmp1/dbus:/shared/dbus
     environment:
       # Set this variable with the location of your shared bus socket
       # NOTE: do not use /run/dbus as this path is overwritten by systemd
@@ -213,7 +213,38 @@ services:
       DBUS_SYSTEM_BUS_ADDRESS: unix:path=/shared/dbus/system_bus_socket
       # Optionally set-up any mock units you need. Service files for these
       # Will be created on service start
-      MOCK_SYSTEMD_UNITS: fakemill.service
+      # Because the mock does not support creation using .service file, we put it here (so it always be there)
+      MOCK_SYSTEMD_UNITS: fakemill.service deployd_user-profile.service
+
+  mock-systemd2:
+    image: ghcr.io/balena-os/mock-systemd-bus@sha256:79b92200fb6481edfea9776a75d6bf3fd8583b79b7e83868f49ba7b295f397ce
+    # Necessary to run systemd in a container
+    privileged: true
+    volumes:
+      - ./tmp2/dbus:/shared/dbus
+    environment:
+      # Set this variable with the location of your shared bus socket
+      # NOTE: do not use /run/dbus as this path is overwritten by systemd
+      # Pinned for reproducibility https://github.com/balena-os/mock-systemd-bus/pkgs/container/mock-systemd-bus
+      DBUS_SYSTEM_BUS_ADDRESS: unix:path=/shared/dbus/system_bus_socket
+      # Optionally set-up any mock units you need. Service files for these
+      # Will be created on service start
+      MOCK_SYSTEMD_UNITS: fakemill.service deployd_user-profile.service
+
+  mock-systemd3:
+    image: ghcr.io/balena-os/mock-systemd-bus@sha256:79b92200fb6481edfea9776a75d6bf3fd8583b79b7e83868f49ba7b295f397ce
+    # Necessary to run systemd in a container
+    privileged: true
+    volumes:
+      - ./tmp3/dbus:/shared/dbus
+    environment:
+      # Set this variable with the location of your shared bus socket
+      # NOTE: do not use /run/dbus as this path is overwritten by systemd
+      # Pinned for reproducibility https://github.com/balena-os/mock-systemd-bus/pkgs/container/mock-systemd-bus
+      DBUS_SYSTEM_BUS_ADDRESS: unix:path=/shared/dbus/system_bus_socket
+      # Optionally set-up any mock units you need. Service files for these
+      # Will be created on service start
+      MOCK_SYSTEMD_UNITS: fakemill.service deployd_user-profile.service
 
 volumes:
   config:

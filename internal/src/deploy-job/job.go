@@ -1,7 +1,5 @@
 package deployjob
 
-import "context"
-
 type Status string
 
 const (
@@ -15,6 +13,7 @@ const (
 )
 
 // Trying to make job generic
+// Not specific to this usecase, TODO: move to common library
 // All prefixed with Get.. to make it easy for each implementation expose their state with the name without prefix
 type Job interface {
 	GetName() string
@@ -23,8 +22,9 @@ type Job interface {
 	GetDAG() DAG
 	GetCurrentSteps() uint8
 	GetTotalSteps() uint8
+	GetURL() string
 
-	Execute(ctx context.Context) // intentional no return value; it should be a side effect that represented by JobStatus
+	Execute() error // intentional no return value; it should be a side effect that represented by JobStatus
 }
 
 type DAG struct {

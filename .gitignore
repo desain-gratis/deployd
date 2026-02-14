@@ -1,4 +1,5 @@
 /deployd
 /artifactd
 /tmp
+/tmp*
 .env

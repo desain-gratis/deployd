@@ -23,16 +23,23 @@ var (
 type ServiceDefinition struct {
 	Ns string `json:"namespace"`
 
-	Id string `json:"id,omitempty"`
+	Id string `json:"id"`
 
-	Name        string `json:"name" ch:"name"`
+	Name        string `json:"name"`
 	Description string `json:"description"`
 
 	Repository     ArtifactdRepository `json:"repository"`
 	ExecutablePath string              `json:"executable_path"` // todo add validation
 
+	BoundAddresses []BoundAddress `json:"bound_addresses"`
+
 	PublishedAt time.Time `json:"published_at"`
 	URLx        string    `json:"url"`
+}
+
+type BoundAddress struct {
+	Host string `json:"host"`
+	Port int    `json:"port"`
 }
 
 type ArtifactdRepository struct {

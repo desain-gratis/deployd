@@ -34,13 +34,8 @@ WantedBy=multi-user.target
 }
 
 // ChatGPTMaxxing
-func ExtractTarGzStrip(ctx context.Context, src, dest string) error {
-	dest = filepath.Clean(dest)
 
-	if err := os.MkdirAll(dest, 0755); err != nil {
-		return err
-	}
-
+func ExtractTarGzStrip(src, dest string) error {
 	f, err := os.Open(src)
 	if err != nil {
 		return err
@@ -49,143 +44,94 @@ func ExtractTarGzStrip(ctx context.Context, src, dest string) error {
 
 	gzr, err := gzip.NewReader(f)
 	if err != nil {
-		return err
+		return fmt.Errorf("gzip error: %w", err)
 	}
 	defer gzr.Close()
 
 	tr := tar.NewReader(gzr)
 
-	var rootPrefix string
-	buf := make([]byte, 32*1024)
-
 	for {
-		// ✅ context cancellation point
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
 		hdr, err := tr.Next()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("tar error: %w", err)
 		}
 
-		// Reject absolute paths
-		if filepath.IsAbs(hdr.Name) {
-			return fmt.Errorf("absolute path rejected: %s", hdr.Name)
+		// Strip first path component
+		cleanName := stripFirstLevel(hdr.Name)
+		if cleanName == "" {
+			continue
 		}
 
-		clean := filepath.Clean(hdr.Name)
-		parts := strings.SplitN(clean, string(os.PathSeparator), 2)
-		if len(parts) < 2 {
-			continue // skip top folder entry
-		}
-
-		// enforce single top-level folder
-		if rootPrefix == "" {
-			rootPrefix = parts[0]
-		} else if parts[0] != rootPrefix {
-			return fmt.Errorf("multiple top-level folders: %s vs %s", rootPrefix, parts[0])
-		}
-
-		relPath := parts[1]
-		target := filepath.Join(dest, relPath)
-		target = filepath.Clean(target)
-
-		// Prevent traversal
-		if !strings.HasPrefix(target, dest+string(os.PathSeparator)) {
-			return fmt.Errorf("path traversal detected: %s", hdr.Name)
-		}
+		targetPath := filepath.Join(dest, cleanName)
 
 		switch hdr.Typeflag {
 
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, 0755); err != nil {
+			if err := os.MkdirAll(targetPath, os.FileMode(hdr.Mode)); err != nil {
 				return err
 			}
 
 		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 				return err
 			}
 
 			out, err := os.OpenFile(
-				target,
-				os.O_CREATE|os.O_EXCL|os.O_WRONLY,
-				os.FileMode(hdr.Mode)&0755,
+				targetPath,
+				os.O_CREATE|os.O_WRONLY|os.O_TRUNC,
+				os.FileMode(hdr.Mode),
 			)
 			if err != nil {
 				return err
 			}
 
-			// ✅ context-aware copy
-			for {
-				select {
-				case <-ctx.Done():
-					out.Close()
-					return ctx.Err()
-				default:
-				}
-
-				n, rerr := tr.Read(buf)
-				if n > 0 {
-					if _, werr := out.Write(buf[:n]); werr != nil {
-						out.Close()
-						return werr
-					}
-				}
-				if rerr != nil {
-					if rerr == io.EOF {
-						break
-					}
-					out.Close()
-					return rerr
-				}
+			if _, err := io.Copy(out, tr); err != nil {
+				out.Close()
+				return err
 			}
-
 			out.Close()
-
-		case tar.TypeSymlink:
-			return fmt.Errorf("symlink rejected: %s", hdr.Name)
-
-		default:
-			return fmt.Errorf("unsupported tar entry: %s", hdr.Name)
 		}
-	}
-
-	if rootPrefix == "" {
-		return fmt.Errorf("invalid or empty archive")
 	}
 
 	return nil
 }
 
-// GPTmaxxing
-func Copy(ctx context.Context, dst io.Writer, src io.Reader) error {
-	buf := make([]byte, 32*1024)
+func stripFirstLevel(path string) string {
+	path = filepath.ToSlash(path)
+	parts := strings.SplitN(path, "/", 2)
 
+	if len(parts) < 2 {
+		return ""
+	}
+	return parts[1]
+}
+
+// GPTmaxxing
+func Copy(ctx context.Context, dst io.Writer, src io.Reader) (int, error) {
+	buf := make([]byte, 32*1024)
+	total := 0
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return 0, ctx.Err()
 		default:
 		}
 
 		n, err := src.Read(buf)
 		if n > 0 {
 			if _, werr := dst.Write(buf[:n]); werr != nil {
-				return werr
+				return 0, werr
 			}
 		}
+		total = total + n
 		if err != nil {
 			if err == io.EOF {
-				return nil
+				return total, nil
 			}
-			return err
+			return 0, err
 		}
 	}
 }

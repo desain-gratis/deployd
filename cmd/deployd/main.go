@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -44,6 +43,8 @@ var (
 
 	// service configuration (to be installed on the host)
 	serviceDefinitionUsecase *mycontent_base.Handler[*entity.ServiceDefinition]
+
+	serviceDeploymentUsecase *mycontent_base.Handler[*entity.ServiceInstanceHost]
 
 	// archive / artifact repository storing build & archive information
 	repositoryUsecase *mycontent_base.Handler[*entity.Repository]
@@ -195,6 +196,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 		&deployjobintegration.Dependencies{
 			HostConfigUsecase:        hostConfigUsecase,
 			ServiceDefinitionUsecase: serviceDefinitionUsecase,
+			ServiceDeploymentUsecase: serviceDeploymentUsecase,
 			RepositoryUsecase:        repositoryUsecase,
 			EnvUsecase:               envUsecase,
 			SecretUsecase:            secretUsecase,
@@ -308,6 +310,9 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 		nil,
 	)
 
+	serviceDeploymentStorage := content_chraft.NewStorageClient(ctx, "deployd_service_deployment")
+	serviceDeploymentUsecase = mycontent_base.New[*entity.ServiceInstanceHost](serviceDeploymentStorage, 2) // TODO: delete
+
 	raftHostHandler := mycontentapi.NewFromStorage[*entity.RaftHost](
 		publicBaseURL+"/deployd/raft/host",
 		[]string{"service"},
@@ -323,14 +328,21 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 	)
 
 	// Deployd raft host specific configuration
-	router.POST("/deployd/host", hostConfigHandler.Post)
-	router.GET("/deployd/host", hostConfigHandler.Get)
-	router.DELETE("/deployd/host", hostConfigHandler.Delete)
+	router.GET("/deployd/host", hostConfigHandler.Get) // TODO: use job
+	// cannot be edited by user
+	// router.POST("/deployd/host", hostConfigHandler.Post)
+	// router.DELETE("/deployd/host", hostConfigHandler.Delete)
 
 	// Service registry
-	router.POST("/deployd/service", serviceDefinitionHandler.Post)
 	router.GET("/deployd/service", serviceDefinitionHandler.Get)
+	router.POST("/deployd/service", serviceDefinitionHandler.Post)
 	router.DELETE("/deployd/service", serviceDefinitionHandler.Delete)
+
+	// Service deployment
+	// router.GET("/deployd/deployment", serviceDeploymentHandler.Get)
+	// cannot be edited by user
+	// router.POST("/deployd/deployment", serviceDeploymentHandler.Post)
+	// router.DELETE("/deployd/deployment", serviceDeploymentHandler.Delete)
 
 	// Replica registry for each service.
 	// We get the source of truth from application that use deployd library.
@@ -342,6 +354,10 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 	router.POST("/deployd/raft/host", raftHostHandler.Post)
 	router.GET("/deployd/raft/host", raftHostHandler.Get)
 	router.DELETE("/deployd/raft/host", raftHostHandler.Delete)
+
+	// Deployd deployment: service definition that has been deployed
+	// Because it is modified by server, we will not expose the Post & Delete interface
+	// router.GET("/deployd/deployment", raftHostHandler.Get)
 }
 
 // enableArtifactDienableArtifactdModulescoveryModule enables upload artifact discovery / metadata query
@@ -493,27 +509,10 @@ func withCors(router http.Handler) http.Handler {
 }
 
 func topicRender(v any) any {
+	log.Info().Msgf("IU: %+v", v)
 	switch value := v.(type) {
 	case deployjobintegration.Log:
-		job, _ := json.Marshal(value.Job)
-
-		collect := map[string]any{
-			"state": json.RawMessage(job),
-			"level": value.Record.Level.String(),
-			"time":  value.Record.Time,
-			"msg":   value.Record.Message,
-		}
-
-		value.Record.Attrs(func(a slog.Attr) bool {
-			// TODO: more advanced value extraction later
-			collect[a.Key] = a.Value.Any()
-			return true
-		})
-
-		payload, _ := json.Marshal(collect)
-
-		log.Info().Msg(string(payload)) // TODO: remove this later (or keep it is ok)
-
+		payload, _ := json.Marshal(value.Record)
 		return string(payload)
 	default:
 		result, _ := json.Marshal(v)
