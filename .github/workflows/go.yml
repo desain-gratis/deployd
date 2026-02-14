@@ -39,7 +39,7 @@ jobs:
       - name: Build deployd and copy necessary files
         run: |
           mkdir -p dist
-          GOOS=linux GOARCH=amd64 go build -o dist/deployd -v ./cmd/deployd/*.go
+          GOOS=linux GOARCH=amd64 go build -o dist/deployd -v ./cmd/test/user-profile/*.go
           cp ./config/deployd/*.yml dist
           cp -r ./www dist
 
