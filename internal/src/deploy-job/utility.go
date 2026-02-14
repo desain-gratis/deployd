@@ -21,7 +21,7 @@ After=network.target
 
 [Service]
 Type=simple
-EnvironmentFile=/etc/%s/overwrite.env
+EnvironmentFile=-/etc/%s/env/overwrite.env
 Environment=DEPLOYD_SERVICE_NAMESPACE=%v
 Environment=DEPLOYD_SERVICE=%s
 ExecStart=/opt/%s/current/%s
