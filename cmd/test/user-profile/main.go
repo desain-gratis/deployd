@@ -16,11 +16,11 @@ func main() {
 	})
 
 	server := &http.Server{
-		Addr:    "localhost:10001",
+		Addr:    "0.0.0.0:10001",
 		Handler: router,
 	}
 
-	log.Println("User profile service is running at http://localhost:10001")
+	log.Println("User profile service is running at http://0.0.0.0:10001")
 
 	server.ListenAndServe()
 }
