@@ -117,7 +117,7 @@ func Deploy(ctx context.Context, cfg DeployConfig) error {
 	active, err := isActive(ctx, conn, unitName)
 	if err != nil || !active {
 		rollback(currentLink, prevTarget, conn, ctx, unitName)
-		return fmt.Errorf("service failed health check after start")
+		return fmt.Errorf("service failed health check after start %v", err)
 	}
 
 	return nil
