@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/v22/dbus"
-	"github.com/desain-gratis/deployd/src/entity"
 )
 
 var _ Job = &configureHost{}
@@ -26,72 +25,60 @@ type configureHost struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	log    *slog.Logger
-
-	status entity.HostConfigurationStatus
 }
 
 func (a *configureHost) Execute() error {
+	var progress float64
+	log := a.log
 	ctx := a.ctx
 	// TODO: separate it into their own module later...
-	a.log.Info("configuring host directory")
+	log.Info("configuring host directory", "progress", progress)
 
 	if err := ctx.Err(); err != nil {
-		a.status = entity.HostConfigurationStatusCancelled
-		a.log.Error("job cancelled", "error", err)
 		return err
 	}
 
 	basePath := fmt.Sprintf("/opt/%v_%v", a.Job.Request.Ns, a.Job.Request.Service.Id)
 
-	a.log.Info("ensuring path", "path", basePath)
+	log.Info("ensuring path", "path", basePath, "progress", progress)
 	err := ensureDir(basePath)
 	if err != nil {
-		a.status = entity.HostConfigurationStatusFailed
-		a.log.Error("error while ensuring directory in base path", "path", basePath, "error", err)
-		return err
+		return fmt.Errorf("error while ensuring directory in base path %v %w", basePath, err)
 	}
 
 	envPath := fmt.Sprintf(basePath+"/env-release/%v", a.Job.Request.EnvVersion)
-	a.log.Info("ensuring path", "path", envPath)
+	log.Info("ensuring path", "path", envPath)
 	err = ensureDir(envPath)
 	if err != nil {
-		a.status = entity.HostConfigurationStatusFailed
-		a.log.Error("error while ensuring env path", "path", envPath, "error", err)
-		return err
+		return fmt.Errorf("error while ensuring env path %v %w", envPath, err)
 	}
 
 	etcPath := fmt.Sprintf("/etc/%v_%v", a.Job.Request.Ns, a.Job.Request.Service.Id)
-	a.log.Info("ensuring path", "path", etcPath)
+	log.Info("ensuring path", "path", etcPath)
 	err = ensureDir(etcPath)
 	if err != nil {
-		a.status = entity.HostConfigurationStatusFailed
-		a.log.Error("error while ensuring etc path", "path", etcPath, "error", err)
-		return err
+		return fmt.Errorf("error while ensuring etc path %v %w", etcPath, err)
 	}
 
 	tmpPath := fmt.Sprintf("/tmp/%s_%s/artifact/%v", a.Job.Request.Ns, a.Job.Request.Service.Id, a.Job.Request.BuildVersion)
-	a.log.Info("ensuring path", "tmp", tmpPath)
+	log.Info("ensuring path", "tmp", tmpPath)
 	err = ensureDir(tmpPath)
 	if err != nil {
-		a.status = entity.HostConfigurationStatusFailed
-		a.log.Error("error while ensuring tmp path", "path", tmpPath, "error", err)
-		return err
+		return fmt.Errorf("error while ensuring tmp path %v %w", tmpPath, err)
 	}
 
 	systemdPath := "/etc/systemd/system"
-	a.log.Info("ensuring path", "path", systemdPath)
+	log.Info("ensuring path", "path", systemdPath)
 	err = ensureDir(systemdPath)
 	if err != nil {
-		a.status = entity.HostConfigurationStatusFailed
-		a.log.Error("error while ensuring systemd path", "path", systemdPath, "error", err)
-		return err
+		return fmt.Errorf("error while ensuring systemd path %v %w", systemdPath, err)
 	}
 
 	// write systemd
-	a.log.Info("writing unit file")
+	progress = 1 / float64(4)
+
+	log.Info("writing unit file", "progress", progress)
 	if err := ctx.Err(); err != nil {
-		a.status = entity.HostConfigurationStatusCancelled
-		a.log.Error("job cancelled", "error", err)
 		return err
 	}
 
@@ -102,16 +89,13 @@ func (a *configureHost) Execute() error {
 		name := serviceName
 		tmp := filepath.Join(systemdPath, name+".tmp")
 		final := filepath.Join(systemdPath, name)
-		if err1 := os.WriteFile(tmp, []byte(content), 0644); err1 != nil {
-			a.status = entity.HostConfigurationStatusFailed
-			a.log.Error("error while ensuring systemd path", "path", systemdPath, "error", err1)
-			return err1
+		if err := os.WriteFile(tmp, []byte(content), 0644); err != nil {
+			return fmt.Errorf("error while writing systemd path %v %w", systemdPath, err)
 		}
-		err1 := os.Rename(tmp, final)
-		if err1 != nil {
-			a.status = entity.HostConfigurationStatusFailed
-			a.log.Error("error while ensuring systemd path", "path", systemdPath, "error", err1)
-			return err1
+
+		err := os.Rename(tmp, final)
+		if err != nil {
+			return fmt.Errorf("error while replacing systemd definition  %v %w", systemdPath, err)
 		}
 
 		return nil
@@ -121,19 +105,19 @@ func (a *configureHost) Execute() error {
 	}
 
 	// start more heavier operation
-	a.log.Info("downloading .env")
+	log.Info("downloading .env", "progress", progress)
 	if err := ctx.Err(); err != nil {
-		a.status = entity.HostConfigurationStatusCancelled
-		a.log.Error("job cancelled", "error", err)
 		return err
 	}
 
 	err = func() error {
-		envData, err1 := a.dependencies.EnvUsecase.Get(ctx, a.Job.Request.Ns, []string{a.Job.Request.Service.Id}, strconv.FormatUint(a.Job.Request.EnvVersion, 10))
-		if err1 != nil || len(envData) == 0 {
-			a.status = entity.HostConfigurationStatusFailed
-			a.log.Error("error while downloading env", "error", err1)
-			return err1
+		envData, err := a.dependencies.EnvUsecase.Get(ctx, a.Job.Request.Ns, []string{a.Job.Request.Service.Id}, strconv.FormatUint(a.Job.Request.EnvVersion, 10))
+		if err != nil {
+			return fmt.Errorf("error while downloading env %w", err)
+		}
+
+		if len(envData) == 0 {
+			return nil
 		}
 
 		env := envData[0]
@@ -147,15 +131,13 @@ func (a *configureHost) Execute() error {
 			return strings.Compare(tmpEnv[i], tmpEnv[j]) < 0
 		})
 
-		a.log.Info("writing .env")
+		log.Info("writing .env")
 
 		path := envPath + "/overwrite.env"
 
-		f, err1 := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-		if err1 != nil {
-			a.status = entity.HostConfigurationStatusFailed
-			a.log.Error("error while opening env file", "path", path, "error", err1)
-			return err1
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err != nil {
+			return fmt.Errorf("error while opening env file in %v %w", path, err)
 		}
 		defer f.Close()
 
@@ -172,71 +154,55 @@ func (a *configureHost) Execute() error {
 	buildReleasePath := fmt.Sprintf(basePath+"/build-release/%v", a.Job.Request.BuildVersion)
 	err = ensureDir(buildReleasePath)
 	if err != nil {
-		a.status = entity.HostConfigurationStatusFailed
-		a.log.Error("error while ensuring build release path", "path", buildReleasePath, "error", err)
-		return err
+		return fmt.Errorf("error while ensuring build release path in %v %w", buildReleasePath, err)
 	}
 
 	// TODO: use per file based check / more robust approach;
 	isBuildEmpty, err := isEmptyDir(buildReleasePath)
 	if err != nil {
-		a.status = entity.HostConfigurationStatusFailed
-		a.log.Error("error while check existing installation inside", "path", buildReleasePath, "error", err)
-		return err
+		return fmt.Errorf("error while ensuring build release path in %v %w", buildReleasePath, err)
 	}
 
 	// TODO: remove this; after finding a way to optimize use installation
 	if !isBuildEmpty {
-		a.status = entity.HostConfigurationStatusSuccess
-		a.log.Info("host is configured")
-		return err
+		return nil
 	}
 
-	a.log.Info("downloading build artifact")
+	progress = 2 / float64(4)
+
+	log.Info("downloading build artifact", "progress", progress)
 	if err := ctx.Err(); err != nil {
-		a.status = entity.HostConfigurationStatusCancelled
-		a.log.Error("job cancelled", "error", err)
 		return err
 	}
 
 	err = func() error {
 		buildId := strconv.FormatUint(a.Job.Request.BuildVersion, 10)
 
-		f, err1 := os.OpenFile(tmpPath+"/release.tar.gz", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-		if err1 != nil {
-			a.status = entity.HostConfigurationStatusFailed
-			a.log.Error("error while opening env file", "error", err1)
-			return err1
+		f, err := os.OpenFile(tmpPath+"/release.tar.gz", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err != nil {
+			return fmt.Errorf("error while opening env file %w", err)
 		}
 		defer f.Close()
 
-		buildArtifact, meta, err1 := a.dependencies.BuildArtifactUsecase.GetAttachment(
+		buildArtifact, meta, err := a.dependencies.BuildArtifactUsecase.GetAttachment(
 			ctx,
 			a.Job.Request.Ns,
 			[]string{a.Job.Request.Service.Id, buildId},
 			fmt.Sprintf("%v/%v", a.host.OS, a.host.Architecture), // attachment can have one to many, so we're restricting to one
 		)
-		if err1 != nil {
-			a.status = entity.HostConfigurationStatusFailed
-			a.log.Error("error while getting build artifact", "error", err1)
-
-			if errors.Is(err1, context.Canceled) {
-				a.Status = StatusCancelled
-			}
-
-			return err1
+		if err != nil {
+			return fmt.Errorf("error while getting build artifact: %w", err)
 		}
 		defer buildArtifact.Close()
 
 		// Download
-		total, err1 := Copy(ctx, f, buildArtifact)
-		if err1 != nil {
-			a.status = entity.HostConfigurationStatusFailed
-			a.log.Error("error while writing artifact file", "error", err1)
-			return err1
+		total, err := Copy(ctx, f, buildArtifact)
+		if err != nil {
+			return fmt.Errorf("error while writing artifact file %w", buildReleasePath, err)
 		}
 
 		if meta.ContentSize != uint64(total) {
+			// maybe check hash
 			return fmt.Errorf("download file size not matching! expected %v got %v", meta.ContentSize, total)
 		}
 
@@ -246,21 +212,18 @@ func (a *configureHost) Execute() error {
 		return err
 	}
 
-	a.log.Info("extracting build artifact")
+	progress = 3 / float64(4)
+	log.Info("extracting build artifact", "progress", progress)
 
 	tmp := buildReleasePath + ".tmp"
 
 	err = ensureDir(tmp)
 	if err != nil {
-		a.status = entity.HostConfigurationStatusFailed
-		a.log.Error("error while ensuring extracted artifact dir", "error", err)
-		return err
+		return fmt.Errorf("error while ensuring artifact dir %w", err)
 	}
 	err = os.RemoveAll(tmp)
 	if err != nil {
-		a.status = entity.HostConfigurationStatusFailed
-		a.log.Error("error while removing old artifact", "error", err)
-		return err
+		return fmt.Errorf("error while removing old artifact %w", err)
 	}
 
 	err = ExtractTarGzStrip(tmpPath+"/release.tar.gz", tmp)
@@ -270,16 +233,12 @@ func (a *configureHost) Execute() error {
 
 	err = os.RemoveAll(buildReleasePath) // delete previous
 	if err != nil {
-		a.status = entity.HostConfigurationStatusFailed
-		a.log.Error("error while deleting previous installation", "error", err)
-		return err
+		return fmt.Errorf("error while deleting previous artifact: %w", err)
 	}
 
 	err = os.Rename(tmp, buildReleasePath)
 	if err != nil {
-		a.status = entity.HostConfigurationStatusFailed
-		a.log.Error("error while renaming artifact file", "error", err)
-		return err
+		return fmt.Errorf("error while replacing artifact: %w", err)
 	}
 
 	err = func() error {
@@ -300,8 +259,7 @@ func (a *configureHost) Execute() error {
 
 		props, err := conn.GetUnitPropertiesContext(ctx, serviceName)
 		if err != nil {
-			a.status = entity.HostConfigurationStatusFailed
-			return err
+			return fmt.Errorf("error while getting systemd context: %w", err)
 		}
 
 		loadErr, ok := props["LoadError"].(string)
@@ -315,7 +273,6 @@ func (a *configureHost) Execute() error {
 		}
 
 		if loadState != "loaded" {
-			a.status = entity.HostConfigurationStatusFailed
 			return fmt.Errorf("service is not loaded. found '%v' state instead for service '%v'", loadState, serviceName)
 		}
 
@@ -325,8 +282,8 @@ func (a *configureHost) Execute() error {
 		return err
 	}
 
-	a.status = entity.HostConfigurationStatusSuccess
-	a.log.Info("successfully configured host")
+	progress = 4 / float64(4)
+	log.Info("successfully configured host", "progress", progress)
 
 	return nil
 }

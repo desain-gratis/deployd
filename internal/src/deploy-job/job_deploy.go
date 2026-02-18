@@ -35,7 +35,8 @@ type deploymentJob struct {
 }
 
 func (d *deploymentJob) startConfigureHost() {
-	// log := d.log
+	log := d.log
+
 	ctx, cancel := context.WithCancel(d.ctx)
 	defer cancel()
 
@@ -53,7 +54,7 @@ func (d *deploymentJob) startConfigureHost() {
 		// when time out, the checking thread the timeout is failed or not later; so
 		// no need to report immediately to Raft during failure;
 		// or we can later
-		// log.Warn("failed to notify configure state to manager.", "error", err)
+		log.Warn("failed to notify configuring state to manager.", "error", err)
 	}
 
 	if d.Job.Request.TimeoutSeconds != nil && *d.Job.Request.TimeoutSeconds >= minimumTimeOutIfConfiguredSeconds {
@@ -64,36 +65,30 @@ func (d *deploymentJob) startConfigureHost() {
 		deploymentJob: d,
 		ctx:           ctx,
 		cancel:        cancel,
-		status:        entity.HostConfigurationStatusPending,
+		log:           log.With("node", "configure-host"),
 	}
 
-	d.configureHost.log = d.log.With("node", "configure-host").
-		With("status", d.configureHost.status).
-		With("address", getKey(d.Job)).
-		With("instance", d.configureHost)
-
-	// log.Info("configuring host")
+	terminalStatus := entity.HostConfigurationStatusSuccess
 
 	var errMsg *string
 	err = d.configureHost.Execute()
 	if err != nil {
-		d.configureHost.status = entity.HostConfigurationStatusFailed
+		terminalStatus = entity.HostConfigurationStatusFailed
 		if errors.Is(err, context.Canceled) {
-			d.configureHost.status = entity.HostConfigurationStatusCancelled
+			terminalStatus = entity.HostConfigurationStatusCancelled
 		}
 		errStr := err.Error()
 		errMsg = &errStr
-	} else {
-		d.configureHost.status = entity.HostConfigurationStatusSuccess
 	}
 
-	// Report back to job manager (raft)
+	// Report back to job manager (raft);
+	// only the terminal state, if raft want much detailed state, they need to hit the local worker endpoint TODO
 	_, err = d.dependencies.RaftJobUsecase.FeedHostConfigurationUpdate(d.ctx, deployjob.ConfigurationUpdateRequest{
 		Ns:           d.Job.Ns,
 		JobId:        d.Job.Id,
 		Service:      d.Job.Request.Service.Id,
 		HostName:     d.host.Host,
-		Status:       d.configureHost.status,
+		Status:       terminalStatus,
 		ErrorMessage: errMsg,
 		UpdatedAt:    time.Now(),
 	})
@@ -119,12 +114,8 @@ func (d *deploymentJob) startRestartHostService() {
 		deploymentJob: d,
 		ctx:           ctx,
 		cancel:        cancel,
-		status:        entity.HostDeploymentStatusRestarting,
+		log:           d.log.With("node", "restart-service"),
 	}
-
-	d.restartHostService.log = d.log.With("node", "restart-service").
-		With("status", d.restartHostService.status).
-		With("instance", d.restartHostService)
 
 	// Report back to job manager (raft)
 	_, err := d.dependencies.RaftJobUsecase.FeedHostRestartServiceUpdate(d.ctx, deployjob.HostRestartServiceUpdateRequest{
@@ -132,7 +123,7 @@ func (d *deploymentJob) startRestartHostService() {
 		JobId:     d.Job.Id,
 		Service:   d.Job.Request.Service.Id,
 		HostName:  d.host.Host,
-		Status:    d.restartHostService.status,
+		Status:    entity.HostDeploymentStatusRestarting,
 		UpdatedAt: time.Now(),
 	})
 	if err != nil {
@@ -142,24 +133,24 @@ func (d *deploymentJob) startRestartHostService() {
 	log.Info("restarting service")
 	var errMsg *string
 
+	terminalStatus := entity.HostDeploymentStatusSuccess
 	err = d.restartHostService.Execute()
 	if err != nil {
-		d.restartHostService.status = entity.HostDeploymentStatusFailed
+		terminalStatus = entity.HostDeploymentStatusFailed
 		if errors.Is(err, context.Canceled) {
-			d.restartHostService.status = entity.HostDeploymentStatusTimeOut
+			terminalStatus = entity.HostDeploymentStatusTimeOut
 		}
 		errStr := err.Error()
 		errMsg = &errStr
-	} else {
-		d.restartHostService.status = entity.HostDeploymentStatusSuccess
 	}
+
 	// Report back to job manager (raft)
 	_, err = d.dependencies.RaftJobUsecase.FeedHostRestartServiceUpdate(d.ctx, deployjob.HostRestartServiceUpdateRequest{
 		Ns:           d.Job.Ns,
 		JobId:        d.Job.Id,
 		Service:      d.Job.Request.Service.Id,
 		HostName:     d.host.Host,
-		Status:       d.restartHostService.status,
+		Status:       terminalStatus,
 		ErrorMessage: errMsg,
 		UpdatedAt:    time.Now(),
 	})

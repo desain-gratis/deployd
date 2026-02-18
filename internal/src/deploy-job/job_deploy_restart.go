@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/v22/dbus"
-	"github.com/desain-gratis/deployd/src/entity"
 )
 
 var _ Job = &restartHostService{}
@@ -23,8 +22,6 @@ type restartHostService struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	log    *slog.Logger
-
-	status entity.HostDeploymentStatus
 }
 
 func (c *restartHostService) Execute() error {

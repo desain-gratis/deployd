@@ -55,7 +55,8 @@ var (
 	// store service's secret
 	secretUsecase *mycontent_base.Handler[*entity.Secret]
 
-	jobUsecase *mycontent_base.Handler[*entity.DeploymentJob]
+	jobUsecase               *mycontent_base.Handler[*entity.DeploymentJob]
+	lastSuccessfulJobUsecase *mycontent_base.Handler[*entity.DeploymentJob]
 
 	buildArtifactUsecase *mycontent_base.HandlerWithAttachment
 
@@ -68,11 +69,8 @@ var currentHost = &entity.Host{
 	Host:         mustEnv("DEPLOYD_HOSTNAME"),
 	OS:           mustEnv("DEPLOYD_OS"),
 	Architecture: mustEnv("DEPLOYD_ARCH"),
-	RaftConfig: entity.DeploydRaftConfig{
-		ReplicaID: getReplicaID(),
-	},
-	FQDN:        "com.deployd",
-	PublishedAt: time.Now(),
+	FQDN:         "com.deployd",
+	PublishedAt:  time.Now(),
 }
 
 func main() {
@@ -183,6 +181,15 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 		[]string{"service"},
 	)
 
+	// store only the latest successful deployment job
+	lastSuccessfulJobStore := content_chraft.NewStorageClient(ctx, deployjob.TableDeploymentSuccess)
+	lastSuccessfulJobUsecase = mycontent_base.New[*entity.DeploymentJob](lastSuccessfulJobStore, 1)
+	lastSuccessfulJobHandler := mycontentapi.New(
+		lastSuccessfulJobUsecase,
+		publicBaseURL+"/deployd/job",
+		[]string{"service"},
+	)
+
 	// more advanced
 	rClient, err := raft_runner.NewClient(ctx)
 	if err != nil {
@@ -212,6 +219,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	router.POST("/deployd/job/confirm-deployment", integration.Http.ConfirmDeployment)
 
 	router.GET("/deployd/job", jobHandler.Get)
+	router.GET("/deployd/successful-job", lastSuccessfulJobHandler.Get)
 
 	integration.Event.StartConsumer(jobTopic, subscription)
 

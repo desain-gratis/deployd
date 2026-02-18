@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand/v2"
-	"path"
 
 	mycontent_base "github.com/desain-gratis/common/delivery/mycontent-api/mycontent/base"
 	content_chraft "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/clickhouse-raft"
@@ -18,8 +16,8 @@ import (
 )
 
 const (
-	TableDeploymentJob       = "deployment_job"
-	TableServiceInstanceHost = "service_instance_host"
+	TableDeploymentJob     = "deployment_job"
+	TableDeploymentSuccess = "deployment_success"
 
 	CommandUserSubmitJob raft.Command = "deployd.user.submit-job"
 	CommandUserCancelJob raft.Command = "deployd.user.cancel-job"
@@ -47,15 +45,15 @@ type raftApp struct {
 
 	topic notifier.Topic
 
-	jobUsecase  *mycontent_base.Handler[*entity.DeploymentJob]
-	serviceHost *mycontent_base.Handler[*entity.ServiceInstanceHost]
+	jobUsecase           *mycontent_base.Handler[*entity.DeploymentJob]
+	successfulJobUsecase *mycontent_base.Handler[*entity.DeploymentJob]
 }
 
 func New(topic notifier.Topic) *raftApp {
 	stateStore := content_chraft.New(
 		topic,
 		content_chraft.TableConfig{Name: TableDeploymentJob, RefSize: 1, IncrementalID: true, IncrementalIDGetLimit: 10},
-		content_chraft.TableConfig{Name: TableServiceInstanceHost, RefSize: 1},
+		content_chraft.TableConfig{Name: TableDeploymentSuccess, RefSize: 1},
 	)
 
 	jobStorage, err := stateStore.GetStorage(TableDeploymentJob)
@@ -63,20 +61,20 @@ func New(topic notifier.Topic) *raftApp {
 		log.Fatal().Msgf("err: %v", err)
 	}
 
-	serviceInstanceStorage, err := stateStore.GetStorage(TableServiceInstanceHost)
+	serviceInstanceStorage, err := stateStore.GetStorage(TableDeploymentSuccess)
 	if err != nil {
 		log.Fatal().Msgf("err: %v", err)
 	}
 
 	// data accessor inside raft
 	jobUsecase := mycontent_base.New[*entity.DeploymentJob](jobStorage, 1)
-	serviceHost := mycontent_base.New[*entity.ServiceInstanceHost](serviceInstanceStorage, 1)
+	successfulJobUsecase := mycontent_base.New[*entity.DeploymentJob](serviceInstanceStorage, 1)
 
 	return &raftApp{
-		topic:       topic,
-		ContentApp:  stateStore,
-		jobUsecase:  jobUsecase,
-		serviceHost: serviceHost,
+		topic:                topic,
+		ContentApp:           stateStore,
+		jobUsecase:           jobUsecase,
+		successfulJobUsecase: successfulJobUsecase,
 	}
 }
 
@@ -130,13 +128,17 @@ func (m *raftApp) OnUpdate(ctx context.Context, e raft.Entry) (raft.OnAfterApply
 func (m *raftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploymentJobRequest) (raft.OnAfterApply, error) {
 	// needto validate duplication outside raft (in http integration layer)
 
-	// check if there is an existing deployment
-	instances, err := m.serviceHost.Get(ctx, request.Service.Ns, []string{request.Service.Id}, "")
+	deploymentTarget := make([]*entity.Host, 0)
+
+	// check if there is a previous successful deployment; and modify the request
+	previousSuccessfulDeployments, err := m.successfulJobUsecase.Get(ctx, request.Service.Ns, []string{request.Service.Id}, "")
 	if err != nil {
 		return nil, err
 	}
 
-	if len(instances) == 0 {
+	if len(previousSuccessfulDeployments) == 0 {
+		// new deployment, no previous successful deployement; populate target host from request
+
 		if len(request.TargetHosts) == 0 {
 			return nil, errors.New("for new deployment, please specify target host")
 		}
@@ -147,41 +149,32 @@ func (m *raftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploy
 		// TODO: move this to their own function
 		// TODO: validate maxxing
 		// TODO: accept job to modify this; (but can be very later); eg. in case of server change disk address
-		randomPort := uint16(rand.UintN(16))%50000 + 14000
-		uniqueReplicaID := make(map[uint64]struct{})
+
 		for _, target := range request.TargetHosts {
-			nodeHostDir := path.Join(path.Clean(target.RaftConfig.NodeHostDir), fmt.Sprintf("%v_%v", request.Service.Ns, request.Service.Id))
-			walDir := path.Join(path.Clean(target.RaftConfig.WALDir), fmt.Sprintf("%v_%v", request.Service.Ns, request.Service.Id))
-
-			if _, ok := uniqueReplicaID[target.RaftConfig.ReplicaID]; ok {
-				return nil, fmt.Errorf("duplicate replica ID found: %v", target.RaftConfig.ReplicaID)
+			// TODO: validate target
+			err := target.Validate()
+			if err != nil {
+				return nil, fmt.Errorf("invalid host configuration: %w", err)
 			}
-			uniqueReplicaID[target.RaftConfig.ReplicaID] = struct{}{}
 
-			instances = append(instances, &entity.ServiceInstanceHost{
-				Ns:      request.Service.Ns,
-				Service: request.Service.Id,
-				Host:    target.Host,
-				RaftConfig: &entity.RaftConfig{
-					RaftPort:       randomPort,
-					ReplicaID:      target.RaftConfig.ReplicaID,
-					RaftWALDir:     walDir,
-					NodeHostDir:    nodeHostDir, // make the same first
-					RTTMillisecond: 100,         // default
-				},
-			})
+			deploymentTarget = append(deploymentTarget, target)
 		}
+	} else {
+		// if already have previous successful deployment, we use it
+		previousSuccessfulDeployment := previousSuccessfulDeployments[0]
+		deploymentTarget = previousSuccessfulDeployment.Request.TargetHosts
 	}
 
-	hostOrdering := make([]string, len(instances))
-	hostDeploymentStatus := make(map[string]entity.HostDeploymentStatusInfo, len(instances))
-	hostConfigurationStatus := make(map[string]entity.HostConfigurationStatusInfo, len(instances))
-	for idx, instance := range instances {
-		hostOrdering[idx] = instance.Host
-		hostDeploymentStatus[instance.Host] = entity.HostDeploymentStatusInfo{
+	// Initialize deployment job
+	deploymentOrder := make([]string, len(deploymentTarget))
+	deploymentStatus := make(map[string]entity.HostDeploymentState, len(deploymentTarget))
+	hostConfigurationStatus := make(map[string]entity.HostConfigurationState, len(deploymentTarget))
+	for idx, target := range deploymentTarget {
+		deploymentOrder[idx] = target.Host
+		deploymentStatus[target.Host] = entity.HostDeploymentState{
 			Status: entity.HostDeploymentStatusPending,
 		}
-		hostConfigurationStatus[instance.Host] = entity.HostConfigurationStatusInfo{
+		hostConfigurationStatus[target.Host] = entity.HostConfigurationState{
 			Status: entity.HostConfigurationStatusPending,
 		}
 	}
@@ -194,8 +187,8 @@ func (m *raftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploy
 		PublishedAt: request.PublishedAt,
 		Deployment: entity.Deployment{
 			CurrentOrder: nil, // nil since it's not yet started
-			HostOrder:    hostOrdering,
-			Status:       hostDeploymentStatus,
+			HostOrder:    deploymentOrder,
+			Status:       deploymentStatus,
 		},
 		Configuration: entity.Configuration{
 			Status: hostConfigurationStatus,
@@ -287,7 +280,7 @@ func (m *raftApp) hostConfigurationUpdate(ctx context.Context, request Configura
 		return nil, fmt.Errorf("invalid host '%v'. available hosts are: %v", request.HostName, job.Configuration.Status)
 	}
 
-	job.Configuration.Status[request.HostName] = entity.HostConfigurationStatusInfo{
+	job.Configuration.Status[request.HostName] = entity.HostConfigurationState{
 		Status:       request.Status,
 		ErrorMessage: request.ErrorMessage,
 	}
@@ -402,7 +395,7 @@ func (m *raftApp) hostRestartServiceUpdate(ctx context.Context, request HostRest
 		return nil, fmt.Errorf("host %v is not yet on deployment. Please wait for %v", request.HostName, hostOnProgress)
 	}
 
-	job.Deployment.Status[request.HostName] = entity.HostDeploymentStatusInfo{
+	job.Deployment.Status[request.HostName] = entity.HostDeploymentState{
 		Status:       request.Status,
 		ErrorMessage: request.ErrorMessage,
 	}
@@ -466,6 +459,11 @@ func (m *raftApp) hostRestartServiceUpdate(ctx context.Context, request HostRest
 		job.Status = entity.DeploymentJobStatusDeployed
 
 		job, err = m.jobUsecase.Post(ctx, job, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = m.successfulJobUsecase.Post(ctx, job, nil)
 		if err != nil {
 			return nil, err
 		}

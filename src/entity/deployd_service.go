@@ -22,7 +22,6 @@ var (
 
 type ServiceDefinition struct {
 	Ns string `json:"namespace"`
-
 	Id string `json:"id"`
 
 	Name        string `json:"name"`
