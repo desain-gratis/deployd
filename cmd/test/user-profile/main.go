@@ -13,7 +13,7 @@ func main() {
 	router := httprouter.New()
 
 	router.GET("/", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		fmt.Fprint(w, "User profile service is running. GG NEW RELEASE! \n")
+		fmt.Fprint(w, "User profile service is running. Edited from my iPhone\n")
 		key := "MESSAGE"
 		fmt.Fprintf(w, "Env read: %v = %v.\n", key, os.Getenv(key))
 	})
