@@ -18,3 +18,6 @@ Test deploy
  - service -> port used mapping;
 
 // Job manager may also use this for healthcheck etc.
+
+// submit UI scratch done; next we can try this library https://github.com/samber/slog-multi?tab=readme-ov-file
+to fan out log output to both stdout and notifier 
