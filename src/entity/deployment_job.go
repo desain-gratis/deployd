@@ -7,36 +7,41 @@ import (
 )
 
 type (
-	DeploymentJobStatus string
+	DeploymentJobStatus     string
+	HostDeploymentStatus    string
+	HostConfigurationStatus string
 )
 
 const (
-	// Initial spawned
-	DeploymentJobStatusQueued DeploymentJobStatus = "QUEUED"
-
-	// Start configuring
+	// Overall status for the deployment job
+	DeploymentJobStatusQueued      DeploymentJobStatus = "QUEUED"
 	DeploymentJobStatusConfiguring DeploymentJobStatus = "CONFIGURING"
+	DeploymentJobStatusConfigured  DeploymentJobStatus = "CONFIGURED"
+	DeploymentJobStatusDeploying   DeploymentJobStatus = "DEPLOYING"
+	DeploymentJobStatusDeployed    DeploymentJobStatus = "DEPLOYED"
+	DeploymentJobStatusSuccess     DeploymentJobStatus = "SUCCESS"
+	DeploymentJobStatusCancelled   DeploymentJobStatus = "CANCELLED"
+	DeploymentJobStatusTimeOut     DeploymentJobStatus = "TIMEOUT"
+	DeploymentJobStatusFailed      DeploymentJobStatus = "FAILED"
 
-	// All host configured
-	DeploymentJobStatusConfigured DeploymentJobStatus = "CONFIGURED"
+	// Host / worker specific configuring step status
+	HostConfigurationStatusPending     HostConfigurationStatus = "PENDING"
+	HostConfigurationStatusConfiguring HostConfigurationStatus = "CONFIGURING"
+	HostConfigurationStatusSuccess     HostConfigurationStatus = "SUCCESS"
+	HostConfigurationStatusFailed      HostConfigurationStatus = "FAILED"
+	HostConfigurationStatusCancelled   HostConfigurationStatus = "CANCELLED"
+	HostConfigurationStatusTimeOut     HostConfigurationStatus = "TIMEOUT"
 
-	// Wait for each host to restart service (one by one)
-	DeploymentJobStatusDeploying DeploymentJobStatus = "DEPLOYING"
-
-	// All hosts finished restart service
-	DeploymentJobStatusDeployed DeploymentJobStatus = "DEPLOYED"
-
-	// Clean up & archived
-	DeploymentJobStatusSuccess DeploymentJobStatus = "SUCCESS"
-
-	// Cancelled
-	DeploymentJobStatusCancelled DeploymentJobStatus = "CANCELLED"
-
-	// Timeout
-	DeploymentJobStatusTimeOut DeploymentJobStatus = "TIMEOUT"
-
-	// Failed
-	DeploymentJobStatusFailed DeploymentJobStatus = "FAILED"
+	// Host / worker specific deployment (restart service, routing, etc.) step status
+	HostDeploymentStatusPending        HostDeploymentStatus = "PENDING"
+	HostDeploymentStatusStarting       HostDeploymentStatus = "STARTING"        // run cloudflared again
+	HostDeploymentStatusDrainTraffic   HostDeploymentStatus = "DRAIN_TRAFFIC"   // stop cloudflared and wait; for networked service
+	HostDeploymentStatusRestarting     HostDeploymentStatus = "RESTARTING"      // stop service, update symlink, start (systemd); for raft service
+	HostDeploymentStatusWaitReady      HostDeploymentStatus = "WAIT_READY"      // healthcheck endpoint that includes raft get leader
+	HostDeploymentStatusRoutingTraffic HostDeploymentStatus = "ROUTING_TRAFFIC" // run cloudflared again
+	HostDeploymentStatusSuccess        HostDeploymentStatus = "SUCCESS"
+	HostDeploymentStatusFailed         HostDeploymentStatus = "FAILED"
+	HostDeploymentStatusTimeOut        HostDeploymentStatus = "TIMEOUT"
 )
 
 type HostDeploymentJob struct {
@@ -61,50 +66,29 @@ type DeploymentJob struct {
 }
 
 type Configuration struct {
-	Status map[string]HostConfigurationStatusInfo `json:"status"`
+	Status map[string]HostConfigurationState `json:"status"`
 }
 
 type Deployment struct {
-	ConfirmedBy  string                              `json:"confirmed_by,omitempty"`
-	CurrentOrder *uint                               `json:"current_order,omitempty"`
-	HostOrder    []string                            `json:"host_order"`
-	Status       map[string]HostDeploymentStatusInfo `json:"status"`
+	ConfirmedBy  string                         `json:"confirmed_by,omitempty"`
+	CurrentOrder *uint                          `json:"current_order,omitempty"`
+	HostOrder    []string                       `json:"host_order"`
+	Status       map[string]HostDeploymentState `json:"status"`
 }
 
-type HostDeploymentStatusInfo struct {
+type HostDeploymentState struct {
 	ErrorMessage *string              `json:"error_message,omitempty"`
 	Status       HostDeploymentStatus `json:"status"`
+	URL          string               `json:"url,omitempty"` // url with job id to stream log from
+	JobID        string               `json:"job_id,omitempty"`
 }
 
-type HostConfigurationStatusInfo struct {
+type HostConfigurationState struct {
 	ErrorMessage *string                 `json:"error_message,omitempty"`
 	Status       HostConfigurationStatus `json:"status"`
+	URL          string                  `json:"url,omitempty"` // url with job id to stream log from
+	JobID        string                  `json:"job_id,omitempty"`
 }
-
-type HostDeploymentStatus string
-type HostConfigurationStatus string
-
-const (
-	// mostly for raft service; ordinary service can run on the same port; but for raft, since they lock the directory to a single process, we just restart
-	// without parallel start / multiple instances
-
-	HostDeploymentStatusPending        HostDeploymentStatus = "PENDING"
-	HostDeploymentStatusStarting       HostDeploymentStatus = "STARTING"        // run cloudflared again
-	HostDeploymentStatusDrainTraffic   HostDeploymentStatus = "DRAIN_TRAFFIC"   // stop cloudflared and wait; for networked service
-	HostDeploymentStatusRestarting     HostDeploymentStatus = "RESTARTING"      // stop service, update symlink, start (systemd); for raft service
-	HostDeploymentStatusWaitReady      HostDeploymentStatus = "WAIT_READY"      // healthcheck endpoint that includes raft get leader
-	HostDeploymentStatusRoutingTraffic HostDeploymentStatus = "ROUTING_TRAFFIC" // run cloudflared again
-	HostDeploymentStatusSuccess        HostDeploymentStatus = "SUCCESS"
-	HostDeploymentStatusFailed         HostDeploymentStatus = "FAILED"
-	HostDeploymentStatusTimeOut        HostDeploymentStatus = "TIMEOUT"
-
-	HostConfigurationStatusPending     HostConfigurationStatus = "PENDING"
-	HostConfigurationStatusConfiguring HostConfigurationStatus = "CONFIGURING"
-	HostConfigurationStatusSuccess     HostConfigurationStatus = "SUCCESS"
-	HostConfigurationStatusFailed      HostConfigurationStatus = "FAILED"
-	HostConfigurationStatusCancelled   HostConfigurationStatus = "CANCELLED"
-	HostConfigurationStatusTimeOut     HostConfigurationStatus = "TIMEOUT"
-)
 
 func (d *DeploymentJob) CreatedTime() time.Time {
 	return d.PublishedAt

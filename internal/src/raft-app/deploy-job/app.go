@@ -463,7 +463,10 @@ func (m *raftApp) hostRestartServiceUpdate(ctx context.Context, request HostRest
 			return nil, err
 		}
 
-		_, err = m.successfulJobUsecase.Post(ctx, job, nil)
+		sjob := job
+		sjob.Id = sjob.Request.Service.Id // index not by version, but by ID
+
+		_, err = m.successfulJobUsecase.Post(ctx, sjob, nil)
 		if err != nil {
 			return nil, err
 		}
