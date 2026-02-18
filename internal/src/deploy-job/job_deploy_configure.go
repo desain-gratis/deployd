@@ -198,7 +198,7 @@ func (a *configureHost) Execute() error {
 		// Download
 		total, err := Copy(ctx, f, buildArtifact)
 		if err != nil {
-			return fmt.Errorf("error while writing artifact file %w", buildReleasePath, err)
+			return fmt.Errorf("error while writing artifact file %v %w", buildReleasePath, err)
 		}
 
 		if meta.ContentSize != uint64(total) {
