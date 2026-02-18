@@ -514,21 +514,40 @@ ${JSON.stringify(targetHosts, null, 2)}
     }
 
 
-
     async function submitDeployment(serviceId, targetHosts) {
+
+      const selectedBuildVersion = Number(
+        document.getElementById('release_version').value
+      );
+
+      const selectedSecretVersion = Number(
+        document.getElementById('secret_version').value
+      );
+
+      const selectedEnvVersion = Number(
+        document.getElementById('env_version').value
+      );
+
+      const timeoutSeconds = Number(
+        document.getElementById('timeout_seconds').value
+      );
 
       const payload = {
         namespace: "deployd",
         service: {
           id: serviceId
         },
-        release_version: document.getElementById('release_version').value,
-        secret_version: Number(document.getElementById('secret_version').value),
-        env_version: Number(document.getElementById('env_version').value),
+
+        // 🔥 FIX HERE
+        build_version: selectedBuildVersion,
+
+        secret_version: selectedSecretVersion,
+        env_version: selectedEnvVersion,
+
         raft_config_version: 0,
         raft_config_replica_version: 0,
         target_hosts: targetHosts,
-        timeout_seconds: Number(document.getElementById('timeout_seconds').value),
+        timeout_seconds: timeoutSeconds,
         is_believe: true
       };
 
@@ -546,6 +565,7 @@ ${JSON.stringify(targetHosts, null, 2)}
       closeModal();
       alert("Deployment requested successfully.");
     }
+
 
 
 
