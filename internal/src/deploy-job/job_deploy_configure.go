@@ -283,7 +283,6 @@ func (a *configureHost) Execute() error {
 	}
 
 	progress = 4 / float64(4)
-	log.Info("successfully configured host", "progress", progress)
 
 	return nil
 }

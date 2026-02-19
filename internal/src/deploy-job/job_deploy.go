@@ -27,6 +27,8 @@ type deploymentJob struct {
 	log          *slog.Logger
 	host         *entity.Host
 
+	State *HostDeploymentJobState `json:"state"` // mutable state
+
 	// sub-job that we manage
 	configureHost      *configureHost
 	restartHostService *restartHostService
@@ -39,6 +41,11 @@ func (d *deploymentJob) startConfigureHost() {
 
 	ctx, cancel := context.WithCancel(d.ctx)
 	defer cancel()
+
+	log.Info("received request to start configure host")
+
+	// modify local state
+	d.State.ConfigurationStatus = entity.HostConfigurationStatusConfiguring
 
 	// Report to job manager (raft) that this host are starting the Configuring & Installing job
 	_, err := d.dependencies.RaftJobUsecase.FeedHostConfigurationUpdate(d.ctx, deployjob.ConfigurationUpdateRequest{
@@ -65,8 +72,10 @@ func (d *deploymentJob) startConfigureHost() {
 		deploymentJob: d,
 		ctx:           ctx,
 		cancel:        cancel,
-		log:           log.With("node", "configure-host"),
+		log:           log,
 	}
+
+	log.Info("configuring service")
 
 	terminalStatus := entity.HostConfigurationStatusSuccess
 
@@ -80,6 +89,8 @@ func (d *deploymentJob) startConfigureHost() {
 		errStr := err.Error()
 		errMsg = &errStr
 	}
+
+	d.State.ConfigurationStatus = terminalStatus
 
 	// Report back to job manager (raft);
 	// only the terminal state, if raft want much detailed state, they need to hit the local worker endpoint TODO
@@ -96,16 +107,15 @@ func (d *deploymentJob) startConfigureHost() {
 		// again, no need to report back to Raft; if timeout, they should check the node whether it's successful or failed.
 		// if not either success or failed (eg. in progress), we say it's invalid / undefined.
 		// if success, raft need help to confirm (because this path is returning error)
-		// log.Warn("failed to notify configure success to manager. manager should check this host.", "error", err) // TODO: implement
+		log.Warn("failed to notify configure success to manager. manager should check this host.", "error", err) // TODO: implement
 		return
 	}
-	// log.Info("successfully configuring host")
+
+	log.Info("successfully configured host")
 }
 
 func (d *deploymentJob) startRestartHostService() {
 	log := d.log
-
-	log.Info("received request to restart service")
 
 	ctx, cancel := context.WithCancel(d.ctx)
 	defer cancel()
@@ -114,8 +124,13 @@ func (d *deploymentJob) startRestartHostService() {
 		deploymentJob: d,
 		ctx:           ctx,
 		cancel:        cancel,
-		log:           d.log.With("node", "restart-service"),
+		log:           log,
 	}
+
+	log.Info("received request to restart service")
+
+	// modify local state
+	d.State.DeploymentStatus = entity.HostDeploymentStatusRestarting
 
 	// Report back to job manager (raft)
 	_, err := d.dependencies.RaftJobUsecase.FeedHostRestartServiceUpdate(d.ctx, deployjob.HostRestartServiceUpdateRequest{
@@ -143,6 +158,8 @@ func (d *deploymentJob) startRestartHostService() {
 		errStr := err.Error()
 		errMsg = &errStr
 	}
+
+	d.State.DeploymentStatus = terminalStatus
 
 	// Report back to job manager (raft)
 	_, err = d.dependencies.RaftJobUsecase.FeedHostRestartServiceUpdate(d.ctx, deployjob.HostRestartServiceUpdateRequest{

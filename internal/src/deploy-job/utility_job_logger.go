@@ -12,16 +12,17 @@ const jobKey = "state"
 type jobLogger struct {
 	slog.Handler
 
-	jobType string
-	job     Job // check if it's feasible; if not, we use generic
-	topic   notifier.Topic
+	topic notifier.Topic
+	attrs map[string]any
 }
 
 // Logger with up-to-date state information
-func NewNotifierLogger(topic notifier.Topic, base slog.Handler) slog.Handler {
+// todo: optimize / or use another library; to store the log in memory (not render immedaitely)
+func NewNotifierLogger(topic notifier.Topic) slog.Handler {
 	return &jobLogger{
-		Handler: base, // TODO: discard handler for production ; can add toggle
+		Handler: slog.DiscardHandler,
 		topic:   topic,
+		attrs:   make(map[string]any),
 	}
 }
 
@@ -32,26 +33,28 @@ func (h *jobLogger) Handle(ctx context.Context, r slog.Record) error {
 		"msg":   r.Message,
 	}
 
-	r.Attrs(func(a slog.Attr) bool {
-		// TODO: more advanced value extraction later
-		// if a.Key == "instance" {
-		// 	switch value := a.Value.Any().(type) {
-		// 	case *restartHostService:
-		// 		collect[a.Key] = *value
-		// 	case *configureHost:
-		// 		collect[a.Key] = *value
-		// 	}
-		// } else {
-		collect[a.Key] = a.Value.Any()
-		// }
-		return true
-	})
+	for k, v := range h.attrs {
+		collect[k] = v
+	}
 
 	// use map for topic which is parsed here;
 	// we parse here so that we can do early filtering
-	h.topic.Broadcast(context.Background(), Log{Record: collect})
+	h.topic.Broadcast(ctx, Log{Record: collect})
 
-	return h.Handle(ctx, r)
+	return nil
+}
+
+func (h *jobLogger) WithAttrs(attrs []slog.Attr) slog.Handler {
+	// todo: optimize / or use another library; to store the log in memory (not render immedaitely)
+	for _, attr := range attrs {
+		h.attrs[attr.Key] = attr.Value.Any()
+	}
+	return h
+}
+
+func (h *jobLogger) WithGroup(name string) slog.Handler {
+	// not supported
+	return h
 }
 
 func (h *jobLogger) Enabled(context.Context, slog.Level) bool { return true }

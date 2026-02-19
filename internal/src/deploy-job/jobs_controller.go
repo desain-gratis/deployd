@@ -3,7 +3,6 @@ package deployjob
 import (
 	"context"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
@@ -30,9 +29,29 @@ type jobsController struct {
 	// other types of job can be put here
 }
 
+type HostDeploymentJobState struct {
+	ConfigurationStatus entity.HostConfigurationStatus `json:"configuration_status"`
+	DeploymentStatus    entity.HostDeploymentStatus    `json:"deployment_status"`
+}
+
 const minimumTimeOutIfConfiguredSeconds = 30
 
 func (w *jobsController) configureHost(out notifier.Topic, jobDefinition entity.DeploymentJob) {
+
+	state := &HostDeploymentJobState{
+		ConfigurationStatus: entity.HostConfigurationStatusPending,
+		DeploymentStatus:    entity.HostDeploymentStatusPending,
+	}
+
+	name := "configure-job-" + jobDefinition.Id
+	log := w.log.
+		With("namespace", jobDefinition.Ns).
+		With("job_id", jobDefinition.Id).
+		With("id", getKey(jobDefinition)). // instance id
+		With("host", w.host.Host).
+		With("name", name).
+		With("state", state)
+
 	// todo: prepare locking
 	if _, ok := w.deploymentJobPool[getKey(jobDefinition)]; ok {
 		return
@@ -56,27 +75,18 @@ func (w *jobsController) configureHost(out notifier.Topic, jobDefinition entity.
 
 		Job: jobDefinition,
 
-		jobBase: &jobBase{
+		State: state,
+
+		jobBase: &jobBase{ // ignore this first
 			Status:      StatusPending,
-			Name:        "configure-job-" + jobDefinition.Id,
+			Name:        name,
 			RetryCount:  0,
 			CurrentStep: 0,
 		},
+
+		log: log,
 	}
 
-	// logger that forwards to topic
-	baseLogger := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{})
-
-	logger := slog.New(baseLogger).
-		With("namespace", jobDefinition.Ns).
-		With("job_id", jobDefinition.Id).
-		With("status", jobDefinition.Status).
-		With("node", "controller").
-		With("instance", job)
-
-	job.log = logger
-
-	// insert into job pool
 	w.deploymentJobPool[getKey(jobDefinition)] = job
 
 	// TODO: use go-routine pooling / other library
@@ -170,9 +180,12 @@ func (w *jobsController) restartService(_ notifier.Topic, event deployjob.EventR
 		return
 	}
 
-	if event.TargetHost == w.host.Host {
-		job.startRestartHostService()
+	// restart is one by one and targeted
+	if event.TargetHost != w.host.Host {
+		return
 	}
+
+	job.startRestartHostService()
 }
 
 func getKey(job entity.DeploymentJob) string {

@@ -200,6 +200,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 
 	integration := deployjobintegration.New(
 		ctx,
+		jobTopic,
 		&deployjobintegration.Dependencies{
 			HostConfigUsecase:        hostConfigUsecase,
 			ServiceDefinitionUsecase: serviceDefinitionUsecase,
@@ -226,6 +227,13 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	handler := notifier_api.NewTopicAPI(jobTopic, topicRender)
 	router.GET("/deployd/job/tail", handler.Tail)
 	router.GET("/deployd/job/stat", handler.Metrics)
+
+	router.GET("/worker/deployment/tail", handler.TailFilterOut(func(msg any) bool {
+		if _, ok := msg.(deployjobintegration.Log); !ok {
+			return true
+		}
+		return false
+	}))
 
 }
 
@@ -517,7 +525,6 @@ func withCors(router http.Handler) http.Handler {
 }
 
 func topicRender(v any) any {
-	log.Info().Msgf("IU: %+v", v)
 	switch value := v.(type) {
 	case deployjobintegration.Log:
 		payload, _ := json.Marshal(value.Record)
@@ -526,4 +533,13 @@ func topicRender(v any) any {
 		result, _ := json.Marshal(v)
 		return string(result)
 	}
+}
+
+func topicRenderWorkerOnly(v any) any {
+	switch value := v.(type) {
+	case deployjobintegration.Log:
+		payload, _ := json.Marshal(value.Record)
+		return string(payload)
+	}
+	return nil
 }

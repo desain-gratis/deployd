@@ -3,9 +3,9 @@ package deployjob
 import (
 	"context"
 	"log/slog"
-	"os"
 
 	mycontent_base "github.com/desain-gratis/common/delivery/mycontent-api/mycontent/base"
+	"github.com/desain-gratis/common/lib/notifier"
 	"github.com/desain-gratis/deployd/src/entity"
 
 	deployjob "github.com/desain-gratis/deployd/internal/src/raft-app/deploy-job"
@@ -49,14 +49,15 @@ type integration struct {
 	Event *eventHandler
 }
 
-func New(ctx context.Context, deps *Dependencies, host *entity.Host) *integration {
+func New(ctx context.Context, out notifier.Topic, deps *Dependencies, host *entity.Host) *integration {
+	logger := slog.New(NewNotifierLogger(out))
+
 	jobsController := &jobsController{
 		dependencies:      deps,
 		host:              host,
-		deploymentJobPool: make(map[string]*deploymentJob),
-		log: slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{})).
-			With("type", "controller").
-			With("job", "deployment-controller"),
+		deploymentJobPool: make(map[string]*deploymentJob), // TODO: use more efficient pool
+		log: logger.
+			With("host", host.Host),
 	}
 
 	i := &integration{
