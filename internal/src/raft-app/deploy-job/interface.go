@@ -53,9 +53,8 @@ type ConfigurationUpdateRequest struct {
 }
 
 type ConfigurationUpdateResponse struct {
-	ConfirmImmediately bool                  `json:"confirm_immediately"`
-	TriggerHost        string                `json:"trigger_host"`
-	Job                *entity.DeploymentJob `json:"job"`
+	TriggerHost string                `json:"trigger_host"`
+	Job         *entity.DeploymentJob `json:"job"`
 }
 
 type RestartConfirmation struct {
@@ -73,13 +72,12 @@ type RestartConfirmation struct {
 }
 
 type HostRestartServiceUpdateResponse struct {
-	Step              int                  `json:"current_step"`
-	TargetHost        string               `json:"target_host"`
-	Job               entity.DeploymentJob `json:"job"`
-	TriggerHost       string               `json:"trigger_host"`
-	DeployImmediately bool                 `json:"deploy_immediately"`
-	Failed            bool                 `json:"failed"`
-	FailReason        *string              `json:"fail_reason,omitempty"`
+	Step        int                  `json:"current_step"`
+	TargetHost  string               `json:"target_host"`
+	Job         entity.DeploymentJob `json:"job"`
+	TriggerHost string               `json:"trigger_host"`
+	Failed      bool                 `json:"failed"`
+	FailReason  *string              `json:"fail_reason,omitempty"`
 }
 
 type HostRestartConfirmationResponse struct {
@@ -95,9 +93,9 @@ type HostRestartServiceUpdateRequest struct {
 	JobId   string `json:"job_id"`
 	Service string `json:"service"`
 
-	HostName     string                      `json:"host_name"`
-	Status       entity.HostDeploymentStatus `json:"status"`
-	ErrorMessage *string                     `json:"message,omitempty"`
+	HostName     string                          `json:"host_name"`
+	Status       entity.HostRestartServiceStatus `json:"status"`
+	ErrorMessage *string                         `json:"message,omitempty"`
 
 	Order *int `json:"order"`
 

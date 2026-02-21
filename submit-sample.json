@@ -34,6 +34,13 @@
       }
     }
   ],
+  "raft_replica": {
+    "0": {
+      "id": "test-replica-v1",
+      "description": "Test replica",
+      "type": "test"
+    }
+  },
   "timeout_seconds": 900,
   "is_believe": true
 }

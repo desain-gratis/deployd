@@ -7,9 +7,9 @@ import (
 )
 
 type (
-	DeploymentJobStatus     string
-	HostDeploymentStatus    string
-	HostConfigurationStatus string
+	DeploymentJobStatus      string
+	HostRestartServiceStatus string
+	HostConfigurationStatus  string
 )
 
 const (
@@ -33,20 +33,20 @@ const (
 	HostConfigurationStatusTimeOut     HostConfigurationStatus = "TIMEOUT"
 
 	// Host / worker specific deployment (restart service, routing, etc.) step status
-	HostDeploymentStatusPending        HostDeploymentStatus = "PENDING"
-	HostDeploymentStatusStarting       HostDeploymentStatus = "STARTING"        // run cloudflared again
-	HostDeploymentStatusDrainTraffic   HostDeploymentStatus = "DRAIN_TRAFFIC"   // stop cloudflared and wait; for networked service
-	HostDeploymentStatusRestarting     HostDeploymentStatus = "RESTARTING"      // stop service, update symlink, start (systemd); for raft service
-	HostDeploymentStatusWaitReady      HostDeploymentStatus = "WAIT_READY"      // healthcheck endpoint that includes raft get leader
-	HostDeploymentStatusRoutingTraffic HostDeploymentStatus = "ROUTING_TRAFFIC" // run cloudflared again
-	HostDeploymentStatusSuccess        HostDeploymentStatus = "SUCCESS"
-	HostDeploymentStatusFailed         HostDeploymentStatus = "FAILED"
-	HostDeploymentStatusTimeOut        HostDeploymentStatus = "TIMEOUT"
+	HostRestartServiceStatusPending        HostRestartServiceStatus = "PENDING"
+	HostRestartServiceStatusStarting       HostRestartServiceStatus = "STARTING"        // run cloudflared again
+	HostRestartServiceStatusDrainTraffic   HostRestartServiceStatus = "DRAIN_TRAFFIC"   // stop cloudflared and wait; for networked service
+	HostRestartServiceStatusRestarting     HostRestartServiceStatus = "RESTARTING"      // stop service, update symlink, start (systemd); for raft service
+	HostRestartServiceStatusWaitReady      HostRestartServiceStatus = "WAIT_READY"      // healthcheck endpoint that includes raft get leader
+	HostRestartServiceStatusRoutingTraffic HostRestartServiceStatus = "ROUTING_TRAFFIC" // run cloudflared again
+	HostRestartServiceStatusSuccess        HostRestartServiceStatus = "SUCCESS"
+	HostRestartServiceStatusFailed         HostRestartServiceStatus = "FAILED"
+	HostRestartServiceStatusTimeOut        HostRestartServiceStatus = "TIMEOUT"
 )
 
 type HostDeploymentJob struct {
 	*DeploymentJob
-	Status HostDeploymentStatus `json:"status"`
+	Status HostRestartServiceStatus `json:"status"`
 }
 
 type DeploymentJob struct {
@@ -57,30 +57,53 @@ type DeploymentJob struct {
 	// TODO: add more relevant permanent info
 	// (non-permanent should be on the raft app / on memory)
 
-	Request       SubmitDeploymentJobRequest `json:"request"`
-	Deployment    Deployment                 `json:"deployment"`
-	Configuration Configuration              `json:"configuration"`
+	Request           SubmitDeploymentJobRequest `json:"request"`
+	RestartServiceJob RestartServiceJob          `json:"restart_service_job"`
+	ConfigureHostJob  ConfigureHostJob           `json:"configure_host_job"`
+
+	// RaftReplica
+	RaftReplica map[uint64]RaftReplicaConfig `json:"raft_replica,omitempty"`
+
+	PendingUserAction *PendingUserAction `json:"pending_user_action,omitempty"`
 
 	Url         string    `json:"url"`
 	PublishedAt time.Time `json:"published_at"`
+	FinishedAt  time.Time `json:"finished_at"`
 }
 
-type Configuration struct {
+// For front end to render the CTA, if "believe"(aka.auto confirm) is not specified
+type PendingUserAction struct {
+	// after configuration finish
+	ConfirmDeployment  *ConfirmDeployment  `json:"confirm_deployment,omitempty"`
+	ContinueDeployment *ContinueDeployment `json:"continue_deployment,omitempty"`
+}
+
+type ConfirmDeployment struct {
+	Message        string
+	CTAButtonLabel string
+}
+
+type ContinueDeployment struct {
+	Message    string
+	TargetHost string
+}
+
+type ConfigureHostJob struct {
 	Status map[string]HostConfigurationState `json:"status"`
 }
 
-type Deployment struct {
-	ConfirmedBy  string                         `json:"confirmed_by,omitempty"`
-	CurrentOrder *uint                          `json:"current_order,omitempty"`
-	HostOrder    []string                       `json:"host_order"`
-	Status       map[string]HostDeploymentState `json:"status"`
+type RestartServiceJob struct {
+	ConfirmedBy  string                             `json:"confirmed_by,omitempty"`
+	CurrentOrder *uint                              `json:"current_order,omitempty"`
+	HostOrder    []string                           `json:"host_order"`
+	Status       map[string]HostRestartServiceState `json:"status"`
 }
 
-type HostDeploymentState struct {
-	ErrorMessage *string              `json:"error_message,omitempty"`
-	Status       HostDeploymentStatus `json:"status"`
-	URL          string               `json:"url,omitempty"` // url with job id to stream log from
-	JobID        string               `json:"job_id,omitempty"`
+type HostRestartServiceState struct {
+	ErrorMessage *string                  `json:"error_message,omitempty"`
+	Status       HostRestartServiceStatus `json:"status"`
+	URL          string                   `json:"url,omitempty"` // url with job id to stream log from
+	JobID        string                   `json:"job_id,omitempty"`
 }
 
 type HostConfigurationState struct {

@@ -29,18 +29,18 @@ type jobsController struct {
 	// other types of job can be put here
 }
 
+// Local host state
 type HostDeploymentJobState struct {
-	ConfigurationStatus entity.HostConfigurationStatus `json:"configuration_status"`
-	DeploymentStatus    entity.HostDeploymentStatus    `json:"deployment_status"`
+	ConfigurationStatus  entity.HostConfigurationStatus  `json:"configuration_status"`
+	RestartServiceStatus entity.HostRestartServiceStatus `json:"restart_service_status"`
 }
 
 const minimumTimeOutIfConfiguredSeconds = 30
 
 func (w *jobsController) configureHost(out notifier.Topic, jobDefinition entity.DeploymentJob) {
-
 	state := &HostDeploymentJobState{
-		ConfigurationStatus: entity.HostConfigurationStatusPending,
-		DeploymentStatus:    entity.HostDeploymentStatusPending,
+		ConfigurationStatus:  entity.HostConfigurationStatusPending,
+		RestartServiceStatus: entity.HostRestartServiceStatusPending,
 	}
 
 	name := "configure-job-" + jobDefinition.Id
@@ -57,7 +57,7 @@ func (w *jobsController) configureHost(out notifier.Topic, jobDefinition entity.
 		return
 	}
 
-	if _, ok := jobDefinition.Configuration.Status[w.host.Host]; !ok {
+	if _, ok := jobDefinition.ConfigureHostJob.Status[w.host.Host]; !ok {
 		// not part of the deployment worker
 		return
 	}

@@ -26,6 +26,9 @@ type SubmitDeploymentJobRequest struct {
 	// TODO: List of hosts to deploy to; for first time deployment
 	TargetHosts []*Host `json:"target_hosts,omitempty"`
 
+	// Registered replica
+	RaftReplica map[uint64]RaftReplicaConfig `json:"raft_replica,omitempty"`
+
 	// TODO: cloudflared configuration
 
 	// TODO: deployment worker job script name (eg. Ubuntu), in which they will define the DAG, and will spawn a worker instances
@@ -39,4 +42,12 @@ type SubmitDeploymentJobRequest struct {
 	IsBelieve   bool      `json:"is_believe"`
 	Url         string    `json:"url"`
 	PublishedAt time.Time `json:"published_at"`
+}
+
+type RaftReplicaConfig struct {
+	BootstrapHost string `json:"bootstrap_host"`
+	ShardID       uint64 `json:"shard_id"`
+	ID            string `json:"id"`
+	Type          string `json:"type"`
+	Description   string `json:"description"`
 }

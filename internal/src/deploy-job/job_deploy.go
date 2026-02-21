@@ -130,7 +130,7 @@ func (d *deploymentJob) startRestartHostService() {
 	log.Info("received request to restart service")
 
 	// modify local state
-	d.State.DeploymentStatus = entity.HostDeploymentStatusRestarting
+	d.State.RestartServiceStatus = entity.HostRestartServiceStatusRestarting
 
 	// Report back to job manager (raft)
 	_, err := d.dependencies.RaftJobUsecase.FeedHostRestartServiceUpdate(d.ctx, deployjob.HostRestartServiceUpdateRequest{
@@ -138,7 +138,7 @@ func (d *deploymentJob) startRestartHostService() {
 		JobId:     d.Job.Id,
 		Service:   d.Job.Request.Service.Id,
 		HostName:  d.host.Host,
-		Status:    entity.HostDeploymentStatusRestarting,
+		Status:    entity.HostRestartServiceStatusRestarting,
 		UpdatedAt: time.Now(),
 	})
 	if err != nil {
@@ -148,18 +148,18 @@ func (d *deploymentJob) startRestartHostService() {
 	log.Info("restarting service")
 	var errMsg *string
 
-	terminalStatus := entity.HostDeploymentStatusSuccess
+	terminalStatus := entity.HostRestartServiceStatusSuccess
 	err = d.restartHostService.Execute()
 	if err != nil {
-		terminalStatus = entity.HostDeploymentStatusFailed
+		terminalStatus = entity.HostRestartServiceStatusFailed
 		if errors.Is(err, context.Canceled) {
-			terminalStatus = entity.HostDeploymentStatusTimeOut
+			terminalStatus = entity.HostRestartServiceStatusTimeOut
 		}
 		errStr := err.Error()
 		errMsg = &errStr
 	}
 
-	d.State.DeploymentStatus = terminalStatus
+	d.State.RestartServiceStatus = terminalStatus
 
 	// Report back to job manager (raft)
 	_, err = d.dependencies.RaftJobUsecase.FeedHostRestartServiceUpdate(d.ctx, deployjob.HostRestartServiceUpdateRequest{
