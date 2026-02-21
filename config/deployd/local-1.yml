@@ -1,10 +1,15 @@
 host:
-  name: "mb1"
+  name: deployd1
   os: linux
   architecture: amd64
 
+# base raft configuration for deployed apps
 raft:
   replica_id: 1
+  base_node_host_dir: "/data"
+  base_wal_dir: "/data"
+  clickhouse:
+    address: "clickhouse-deployd1:9000"
 
 http:
   public:

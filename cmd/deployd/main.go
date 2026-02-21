@@ -38,6 +38,8 @@ func init() {
 var (
 	publicBaseURL string
 
+	currentHost *entity.Host
+
 	// host specific configuration
 	hostConfigUsecase *mycontent_base.Handler[*entity.Host]
 
@@ -64,19 +66,28 @@ var (
 	raftDeployjobUsecase *deployjob.Client
 )
 
-var currentHost = &entity.Host{
-	Ns:           "deployd",
-	Host:         mustEnv("DEPLOYD_HOSTNAME"),
-	OS:           mustEnv("DEPLOYD_OS"),
-	Architecture: mustEnv("DEPLOYD_ARCH"),
-	FQDN:         "com.deployd",
-	PublishedAt:  time.Now(),
-}
-
 func main() {
 	ctx, cancel := context.WithCancelCause(context.Background())
 
 	initConfig()
+
+	currentHost = &entity.Host{
+		Ns:           "deployd",
+		Host:         config.GetString("host.name"),
+		OS:           config.GetString("host.os"),
+		Architecture: config.GetString("host.architecture"),
+		FQDN:         config.GetString("http.public.fqdn"),
+		RaftConfig: entity.RaftHostConfig{
+			ReplicaID:       config.GetUint64("raft.replica_id"),
+			BaseWALDir:      config.GetString("raft.base_wal_dir"),
+			BaseNodeHostDir: config.GetString("raft.base_node_host_dir"),
+			RTTMillisecond:  900,
+			ClickhouseStateStore: entity.ClickhouseStateSorageConfig{
+				Address: config.GetString("raft.clickhouse.address"),
+			},
+		},
+		PublishedAt: time.Now(),
+	}
 
 	err := deployd.InjectSecretToViper(config.Viper)
 	if err != nil && !errors.Is(err, deployd.ErrNotConfigured) {
@@ -215,9 +226,9 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 		currentHost,
 	)
 
-	router.POST("/deployd/job/submit", integration.Http.SubmitJob)
-	router.POST("/deployd/job/cancel/:service/:id", integration.Http.CancelJob)
-	router.POST("/deployd/job/confirm-deployment", integration.Http.ConfirmDeployment)
+	router.POST("/deployd/submit-job", integration.Http.SubmitJob)
+	router.POST("/deployd/job/:service/:id/cancel", integration.Http.CancelJob)
+	router.POST("/deployd/job/:service/:id/proceed", integration.Http.ConfirmDeployment)
 
 	router.GET("/deployd/job", jobHandler.Get)
 	router.GET("/deployd/successful-job", lastSuccessfulJobHandler.Get)
@@ -344,10 +355,9 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 	)
 
 	// Deployd raft host specific configuration
-	router.GET("/deployd/host", hostConfigHandler.Get) // TODO: use job
-	// cannot be edited by user
-	// router.POST("/deployd/host", hostConfigHandler.Post)
-	// router.DELETE("/deployd/host", hostConfigHandler.Delete)
+	router.GET("/deployd/host", hostConfigHandler.Get)
+	// router.POST("/deployd/host", hostConfigHandler.Post) 	// cannot be edited by user
+	// router.DELETE("/deployd/host", hostConfigHandler.Delete)	// cannot be edited by user
 
 	// Service registry
 	router.GET("/deployd/service", serviceDefinitionHandler.Get)

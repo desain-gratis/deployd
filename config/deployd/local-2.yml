@@ -1,15 +1,20 @@
 host:
-  name: "mb2"
+  name: deployd2
   os: linux
   architecture: amd64
 
+# base raft configuration for deployed apps
 raft:
   replica_id: 2
+  base_node_host_dir: "/data"
+  base_wal_dir: "/data"
+  clickhouse:
+    address: "clickhouse-deployd2:9000"
 
 http:
   public:
     address: ":9600"
-    fqdn: http://localhost:9401
+    fqdn: http://localhost:9402
 
 ui:
   dir: "/var/www"
