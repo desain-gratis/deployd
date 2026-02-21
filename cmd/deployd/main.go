@@ -228,13 +228,13 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	router.GET("/deployd/job/tail", handler.Tail)
 	router.GET("/deployd/job/stat", handler.Metrics)
 
-	router.GET("/worker/deployment/tail", handler.TailFilterOut(func(msg any) bool {
-		if _, ok := msg.(deployjobintegration.Log); !ok {
-			return true
-		}
-		return false
-	}))
+	router.GET("/worker/deployment/tail", handler.TailFilterOut(filterLog))
 
+	whitelist := []string{
+		"http://localhost:*", "http://localhost",
+		"http://mb1:*", "http://mb2:*", "http://mb3:*",
+	}
+	router.GET("/worker/deployment/ws", handler.Websocket(ctx, whitelist, filterLog))
 }
 
 func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
@@ -533,6 +533,13 @@ func topicRender(v any) any {
 		result, _ := json.Marshal(v)
 		return string(result)
 	}
+}
+
+func filterLog(msg any) bool {
+	if _, ok := msg.(deployjobintegration.Log); !ok {
+		return true
+	}
+	return false
 }
 
 func topicRenderWorkerOnly(v any) any {
