@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/desain-gratis/common/delivery/mycontent-api/mycontent"
 	mycontent_base "github.com/desain-gratis/common/delivery/mycontent-api/mycontent/base"
 	content_chraft "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/clickhouse-raft"
 	"github.com/desain-gratis/common/lib/notifier"
@@ -46,14 +47,14 @@ type raftApp struct {
 	topic notifier.Topic
 
 	jobUsecase           *mycontent_base.Handler[*entity.DeploymentJob]
-	successfulJobUsecase *mycontent_base.Handler[*entity.DeploymentJob]
+	successfulJobUsecase *mycontent_base.Handler[*entity.DeploymentJobByService]
 }
 
 func New(topic notifier.Topic) *raftApp {
 	stateStore := content_chraft.New(
 		topic,
 		content_chraft.TableConfig{Name: TableDeploymentJob, RefSize: 1, IncrementalID: true, IncrementalIDGetLimit: 10},
-		content_chraft.TableConfig{Name: TableDeploymentSuccess, RefSize: 1},
+		content_chraft.TableConfig{Name: TableDeploymentSuccess, RefSize: 0},
 	)
 
 	jobStorage, err := stateStore.GetStorage(TableDeploymentJob)
@@ -68,7 +69,7 @@ func New(topic notifier.Topic) *raftApp {
 
 	// data accessor inside raft
 	jobUsecase := mycontent_base.New[*entity.DeploymentJob](jobStorage, 1)
-	successfulJobUsecase := mycontent_base.New[*entity.DeploymentJob](serviceInstanceStorage, 1)
+	successfulJobUsecase := mycontent_base.New[*entity.DeploymentJobByService](serviceInstanceStorage, 0)
 
 	return &raftApp{
 		topic:                topic,
@@ -126,128 +127,49 @@ func (m *raftApp) OnUpdate(ctx context.Context, e raft.Entry) (raft.OnAfterApply
 // Later if we have multiple ContentApp, then you need to implement it to make sure all method are executed.
 
 func (m *raftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploymentJobRequest) (raft.OnAfterApply, error) {
-	// needto validate duplication outside raft (in http integration layer)
+	// TODO: make sure there is no active deployment for the namespace/service pair.
+	var previousJob *entity.DeploymentJob
+	previousSuccessfulDeployment, err := m.successfulJobUsecase.Get(ctx, request.Service.Ns, nil, request.Service.Id)
+	if err != nil && !errors.Is(err, mycontent.ErrNotFound) {
+		return nil, fmt.Errorf("failed to get previous successful job: %w", err)
+	}
+	if len(previousSuccessfulDeployment) >= 1 {
+		previousJob = previousSuccessfulDeployment[0].DeploymentJob
+	}
 
-	deploymentTarget := make([]*entity.Host, 0)
-	raftReplica := make(map[uint64]entity.RaftReplicaConfig)
-
-	// check if there is a previous successful deployment; and modify the request
-	previousSuccessfulDeployments, err := m.successfulJobUsecase.Get(ctx, request.Service.Ns, []string{request.Service.Id}, "")
+	deploymentTarget, err := m.getDeploymentTarget(previousJob, request)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO: refactor refactorrr
-	if len(previousSuccessfulDeployments) == 0 {
-		// new deployment, no previous successful deployement; populate target host from request
-
-		if len(request.TargetHosts) == 0 {
-			return nil, errors.New("for new deployment, please specify target host")
-		}
-
-		bootstrapHost := request.TargetHosts[len(request.TargetHosts)-1].Host
-
-		// validate raft replica
-		err := validateReplica(request.RaftReplica)
-		if err != nil {
-			return nil, fmt.Errorf("invalid raft replica config: %w", err)
-		}
-
-		// Create New instances
-
-		// TODO: compare used port
-		// TODO: move this to their own function
-		// TODO: validate maxxing
-		// TODO: accept job to modify this; (but can be very later); eg. in case of server change disk address
-
-		var targetHostErr error
-		for _, target := range request.TargetHosts {
-			// TODO: validate target
-			err := target.Validate()
-			if err != nil {
-				targetHostErr = errors.Join(targetHostErr, err)
-			}
-
-			deploymentTarget = append(deploymentTarget, target)
-		}
-		if targetHostErr != nil {
-			return nil, fmt.Errorf("invalid target host config: %w", targetHostErr)
-		}
-
-		for shardID, rep := range request.RaftReplica {
-			raftReplica[rep.ShardID] = entity.RaftReplicaConfig{
-				BootstrapHost: bootstrapHost,
-				ShardID:       shardID,
-				ID:            rep.ID,
-				Type:          rep.Type,
-				Description:   rep.Description,
-			}
-		}
-		// make the last target host as replica leader
-	} else {
-		// if already have previous successful deployment, we use it
-		previousSuccessfulDeployment := previousSuccessfulDeployments[0]
-		deploymentTarget = previousSuccessfulDeployment.Request.TargetHosts
-		raftReplica = previousSuccessfulDeployment.RaftReplica
-
-		if request.RaftReplica != nil {
-			bootstrapHost := deploymentTarget[len(request.TargetHosts)-1].Host
-			err := validateReplica(request.RaftReplica)
-			if err != nil {
-				return nil, fmt.Errorf("invalid raft replica config: %w", err)
-			}
-			for shardID, rep := range request.RaftReplica {
-				if _, ok := raftReplica[shardID]; ok {
-					// cannot modify existing replica
-					continue
-				}
-
-				raftReplica[shardID] = entity.RaftReplicaConfig{
-					BootstrapHost: bootstrapHost,
-					ShardID:       shardID,
-					ID:            rep.ID,
-					Type:          rep.Type,
-					Description:   rep.Description,
-				}
-			}
-		}
+	raftReplica, err := m.getRaftReplicaConfig(previousJob, deploymentTarget, request)
+	if err != nil {
+		return nil, err
 	}
 
-	// Initialize deployment job
-	deploymentOrder := make([]string, len(deploymentTarget))
-	deploymentStatus := make(map[string]entity.HostRestartServiceState, len(deploymentTarget))
-	hostConfigurationStatus := make(map[string]entity.HostConfigurationState, len(deploymentTarget))
-	for idx, target := range deploymentTarget {
-		deploymentOrder[idx] = target.Host
-		deploymentStatus[target.Host] = entity.HostRestartServiceState{
-			Status: entity.HostRestartServiceStatusPending,
-		}
-		hostConfigurationStatus[target.Host] = entity.HostConfigurationState{
-			Status: entity.HostConfigurationStatusPending,
-		}
+	raftServiceConfig, err := m.getRaftServiceConfig(previousJob, deploymentTarget, request)
+	if err != nil {
+		return nil, err
 	}
 
-	// we create / initialize the job
-	job := &entity.DeploymentJob{
+	job := entity.DeploymentJob{
 		Ns:          request.Ns,
-		Status:      entity.DeploymentJobStatusQueued,
-		Request:     request,
 		PublishedAt: request.PublishedAt,
-		RestartServiceJob: entity.RestartServiceJob{
-			CurrentOrder: nil, // nil since it's not yet started
-			HostOrder:    deploymentOrder,
-			Status:       deploymentStatus,
-		},
-		RaftReplica: raftReplica, // bake the raft config
-		ConfigureHostJob: entity.ConfigureHostJob{
-			Status: hostConfigurationStatus,
-		},
 	}
+	job.Target = deploymentTarget
+	job.RaftConfig.Replica = raftReplica
+	job.RaftConfig.Service = raftServiceConfig
+	job.Request = request
+
+	// for convenience
+	job.Request.TargetHosts = nil
+
+	initDeploymentJobState(&job)
 
 	// TODO: utilize metamaxxing
 	jobMeta := map[string]any{"author": "kmg"}
 
-	result, err := m.jobUsecase.Post(ctx, job, jobMeta)
+	result, err := m.jobUsecase.Post(ctx, &job, jobMeta)
 	if err != nil {
 		return nil, err
 	}
@@ -517,7 +439,7 @@ func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request Hos
 	// It means, all restart are successful.
 	if int(*job.RestartServiceJob.CurrentOrder) >= len(job.RestartServiceJob.Status) {
 		job.Status = entity.DeploymentJobStatusDeployed
-		job.FinishedAt = request.UpdatedAt
+		job.FinishedAt = &request.UpdatedAt
 
 		job, err = m.jobUsecase.Post(ctx, job, nil)
 		if err != nil {
@@ -527,7 +449,7 @@ func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request Hos
 		jobCopy := job
 		jobCopy.Id = jobCopy.Request.Service.Id // index not by version, but by ID
 
-		_, err = m.successfulJobUsecase.Post(ctx, jobCopy, nil)
+		_, err = m.successfulJobUsecase.Post(ctx, &entity.DeploymentJobByService{DeploymentJob: jobCopy}, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -578,6 +500,107 @@ func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request Hos
 	}, nil
 }
 
+func getLeaderByTarget(target []entity.Host) (entity.Host, error) {
+	ntarget := len(target)
+	if ntarget <= 1 {
+		return entity.Host{}, fmt.Errorf("invalid deployment target length %v", len(target))
+	}
+
+	return target[len(target)-1], nil
+}
+
+func (m *raftApp) getRaftServiceConfig(previousJob *entity.DeploymentJob, target []entity.Host, request entity.SubmitDeploymentJobRequest) (map[string]entity.RaftServiceConfig, error) {
+	if previousJob != nil {
+		// always use previous config (because it's already "baked")
+		// change in configuration is possible, but only with new deployment
+		return previousJob.RaftConfig.Service, nil
+	}
+
+	if request.RaftPort <= 10000 { // || request.RaftPort >= math.MaxUint16
+		return nil, fmt.Errorf("reqeusted raft port: %v is outside of  valid range (10000 - 65535)", request.RaftPort)
+	}
+
+	uniqValidation := make(map[uint64]string)
+	var err error
+	result := make(map[string]entity.RaftServiceConfig)
+	for _, t := range target {
+		// TODO: validatemaxxing
+		if conflict, ok := uniqValidation[t.RaftConfig.ReplicaID]; ok {
+			err = errors.Join(err, fmt.Errorf("duplicate replica id=%v for host=%v and host=%v", t.RaftConfig.ReplicaID, t.Host, conflict))
+		}
+
+		result[t.Host] = entity.RaftServiceConfig{
+			RaftAddress:  fmt.Sprintf("%v:%d", t.Host, request.RaftPort),
+			ReplicaID:    t.RaftConfig.ReplicaID,   // get from host for convenience
+			DeploymentID: request.RaftDeploymentID, // TODO: implement
+
+			// The others can be inffered from host's t.RaftConfig
+			// from service perspective, only raft port is needed to be agreed
+		}
+		uniqValidation[t.RaftConfig.ReplicaID] = t.Host
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (m *raftApp) getRaftReplicaConfig(previousJob *entity.DeploymentJob, target []entity.Host, request entity.SubmitDeploymentJobRequest) (map[uint64]entity.RaftReplicaConfig, error) {
+	if previousJob != nil {
+		// TODO: we can do merging later, in case we want to add new replica (or remove one, if possible)
+		return previousJob.RaftConfig.Replica, nil
+	}
+
+	bootstrapHost, err := getLeaderByTarget(target)
+	if err != nil {
+		return nil, err
+	}
+
+	replica := make(map[uint64]entity.RaftReplicaConfig)
+	for shardID, rep := range request.RaftReplica {
+		replica[rep.ShardID] = entity.RaftReplicaConfig{
+			BootstrapHost: bootstrapHost.Host,
+			ShardID:       shardID,
+			ID:            rep.ID,
+			Type:          rep.Type,
+			Description:   rep.Description,
+		}
+	}
+
+	return replica, nil
+}
+
+func (m *raftApp) getDeploymentTarget(previous *entity.DeploymentJob, request entity.SubmitDeploymentJobRequest) ([]entity.Host, error) {
+	// if there is previous deployment, we use that.
+	// right now, we do not support other logic.. (can be later in upscale / downscale / change membership scenario)
+	if previous != nil {
+		return previous.Target, nil
+	}
+
+	// else, a new deployment
+	var deploymentTarget []entity.Host
+	if len(request.TargetHosts) == 0 {
+		return nil, errors.New("for new deployment, please specify target host")
+	}
+
+	var targetHostErr error
+	for _, target := range request.TargetHosts {
+		// TODO: validate target
+		err := target.Validate()
+		if err != nil {
+			targetHostErr = errors.Join(targetHostErr, err)
+		}
+
+		deploymentTarget = append(deploymentTarget, target)
+	}
+	if targetHostErr != nil {
+		return nil, fmt.Errorf("error determining target host: %w", targetHostErr)
+	}
+
+	return deploymentTarget, nil
+}
+
 func parseAs[T any](payload []byte) (T, error) {
 	var t T
 	err := json.Unmarshal(payload, &t)
@@ -595,4 +618,21 @@ func validateReplica(rep map[uint64]entity.RaftReplicaConfig) error {
 		}
 	}
 	return err
+}
+
+func initDeploymentJobState(job *entity.DeploymentJob) {
+	job.Status = entity.DeploymentJobStatusQueued
+
+	job.RestartServiceJob.HostOrder = make([]string, len(job.Target))
+	job.RestartServiceJob.Status = make(map[string]entity.HostRestartServiceState, len(job.Target))
+	job.ConfigureHostJob.Status = make(map[string]entity.HostConfigurationState, len(job.Target))
+	for idx, target := range job.Target {
+		job.RestartServiceJob.HostOrder[idx] = target.Host
+		job.RestartServiceJob.Status[target.Host] = entity.HostRestartServiceState{
+			Status: entity.HostRestartServiceStatusPending,
+		}
+		job.ConfigureHostJob.Status[target.Host] = entity.HostConfigurationState{
+			Status: entity.HostConfigurationStatusPending,
+		}
+	}
 }

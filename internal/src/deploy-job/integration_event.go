@@ -17,7 +17,7 @@ func (w *eventHandler) StartConsumer(topic notifier.Topic, subscription notifier
 		for event := range subscription.Listen() {
 			switch value := event.(type) {
 			case deployjob.EventDeploymentJobCreated:
-				w.jobsController.configureHost(topic, value.Job)
+				w.jobsController.initializeDeployment(topic, value.Job)
 			case deployjob.EventDeploymentJobCancelled:
 				w.jobsController.cancelDeployment(topic, value.Job)
 			case deployjob.EventRestartConfirmed:

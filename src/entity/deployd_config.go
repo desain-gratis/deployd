@@ -17,17 +17,10 @@ type Host struct {
 	OS           string `json:"os"`
 	FQDN         string `json:"fqdn"`
 
-	PublishedAt time.Time `json:"published_at" ch:"published_at"`
+	RaftConfig RaftHostConfig `json:"raft_config"`
+
+	PublishedAt time.Time `json:"published_at"`
 	URLx        string    `json:"url"`
-}
-
-type DeploydRaftConfig struct {
-	// (Preferred) replica ID for this host
-	ReplicaID uint64 `json:"replica_id"`
-
-	Port        uint16 `json:"port"`
-	WALDir      string `json:"wal_dir"` // validate / normalize dir
-	NodeHostDir string `json:"node_host_dir"`
 }
 
 func (a *Host) CreatedTime() time.Time {

@@ -553,7 +553,7 @@ ${JSON.stringify(targetHosts, null, 2)}
 
       console.log("Deployment Payload:", payload);
 
-      await fetch(API + "/deployd/job/submit", {
+      await fetch(API + "/deployd/submit-job", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

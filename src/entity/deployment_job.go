@@ -49,26 +49,42 @@ type HostDeploymentJob struct {
 	Status HostRestartServiceStatus `json:"status"`
 }
 
+// Limitation of DG framework; if you have an entity that can indexed many way, you need to make separate struct
+type DeploymentJobByService struct {
+	*DeploymentJob
+}
+
+func (d *DeploymentJobByService) RefIDs() []string {
+	return nil
+}
+
 type DeploymentJob struct {
 	Ns     string              `json:"namespace"`
 	Status DeploymentJobStatus `json:"status"`
 	Id     string              `json:"id"`
 
-	// TODO: add more relevant permanent info
-	// (non-permanent should be on the raft app / on memory)
+	// The request
+	Request SubmitDeploymentJobRequest `json:"request"`
 
-	Request           SubmitDeploymentJobRequest `json:"request"`
-	RestartServiceJob RestartServiceJob          `json:"restart_service_job"`
-	ConfigureHostJob  ConfigureHostJob           `json:"configure_host_job"`
+	// The target host in which we will deploy our service to;
+	// In dragonboat lingo, this would be the Nodes, as opossed to NonVotings, Witnesses, Removed member type.
+	Target []Host `json:"target"`
 
-	// RaftReplica
-	RaftReplica map[uint64]RaftReplicaConfig `json:"raft_replica,omitempty"`
+	RestartServiceJob RestartServiceJob `json:"restart_service_job"`
+	ConfigureHostJob  ConfigureHostJob  `json:"configure_host_job"`
+
+	RaftConfig RaftConfig `json:"raft_config"`
 
 	PendingUserAction *PendingUserAction `json:"pending_user_action,omitempty"`
 
-	Url         string    `json:"url"`
-	PublishedAt time.Time `json:"published_at"`
-	FinishedAt  time.Time `json:"finished_at"`
+	Url         string     `json:"url"`
+	PublishedAt time.Time  `json:"published_at"`
+	FinishedAt  *time.Time `json:"finished_at,omitempty"`
+}
+
+type RaftConfig struct {
+	Service map[string]RaftServiceConfig `json:"service,omitempty"`
+	Replica map[uint64]RaftReplicaConfig `json:"replica,omitempty"`
 }
 
 // For front end to render the CTA, if "believe"(aka.auto confirm) is not specified
@@ -97,6 +113,7 @@ type RestartServiceJob struct {
 	CurrentOrder *uint                              `json:"current_order,omitempty"`
 	HostOrder    []string                           `json:"host_order"`
 	Status       map[string]HostRestartServiceState `json:"status"`
+	ConfirmedAt  *time.Time                         `json:"confirmed_at,omitempty"`
 }
 
 type HostRestartServiceState struct {

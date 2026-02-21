@@ -24,15 +24,6 @@ type ServiceInstanceHost struct {
 	URLx        string    `json:"url"`
 }
 
-type RaftConfig struct {
-	RaftPort       uint16 `json:"raft_port"`
-	ReplicaID      uint64 `json:"replica_id"`
-	RaftWALDir     string `json:"wal_dir"`
-	NodeHostDir    string `json:"node_host_dir"`
-	RTTMillisecond uint64 `json:"rtt_millisecond"`
-	DeploymentID   uint64 `json:"deployment_id"`
-}
-
 func (a *ServiceInstanceHost) CreatedTime() time.Time {
 	return a.PublishedAt
 }

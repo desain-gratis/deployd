@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"time"
 
@@ -78,8 +79,31 @@ func (h *httpHandler) SubmitJob(w http.ResponseWriter, r *http.Request, p httpro
 		}
 	}
 
+	// overwrite host data with latest data from host config to snapshot;
+	// maybe use optimistic lock in the request (later)
+	allHosts, err := h.dependencies.HostConfigUsecase.Get(ctx, dj.Ns, nil, "")
+	if err != nil {
+		fmt.Fprintf(w, `{"error": "error during getting current hosts: %v"}`, err) // TODO: more appropriate
+		return
+	}
+
+	hostByName := make(map[string]*entity.Host)
+	for _, host := range allHosts {
+		hostByName[host.Host] = host
+	}
+	for idx, target := range dj.TargetHosts {
+		fullHostData, ok := hostByName[target.Host]
+		if !ok {
+			fmt.Fprintf(w, `{"error": "host not found %v"}`, target.Host) // TODO: more appropriate
+			return
+		}
+		dj.TargetHosts[idx] = *fullHostData
+	}
+
 	dj.Service = *service
 	dj.PublishedAt = time.Now()
+
+	dj.RaftPort = RandomPort()
 
 	modifySecret := "generate secret"
 	dj.ModifyKey = &modifySecret // TODO: nice to have; only user that have the secret can update this state
@@ -139,6 +163,7 @@ func (h *httpHandler) CancelJob(w http.ResponseWriter, r *http.Request, p httpro
 }
 
 func (h *httpHandler) ConfirmDeployment(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	// TODO:
 	fmt.Fprintf(w, "deployment confirmed")
 }
 
@@ -155,4 +180,8 @@ func (h *httpHandler) StreamLog(topic notifier.Topic) httprouter.Handle {
 		// job
 
 	}
+}
+
+func RandomPort() uint16 {
+	return uint16(rand.Intn(65535-10000) + 10000)
 }

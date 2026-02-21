@@ -15,19 +15,20 @@ type SubmitDeploymentJobRequest struct {
 	Service ServiceDefinition `json:"service"`
 	Id      string            `json:"id"`
 
-	BuildVersion             uint64 `json:"build_version"`
-	SecretVersion            uint64 `json:"secret_version"`
-	EnvVersion               uint64 `json:"env_version"`
-	RaftConfigVersion        uint64 `json:"raft_config_version"`
-	RaftConfigReplicaVersion uint64 `json:"raft_config_replica_version"`
-
-	ModifyKey *string `json:"-"` // hidden; TODO: to be nice, to lock, only the one who have this key can modify the state.
+	BuildVersion  uint64 `json:"build_version"`
+	SecretVersion uint64 `json:"secret_version"`
+	EnvVersion    uint64 `json:"env_version"`
 
 	// TODO: List of hosts to deploy to; for first time deployment
-	TargetHosts []*Host `json:"target_hosts,omitempty"`
+	TargetHosts []Host `json:"target_hosts,omitempty"`
 
-	// Registered replica
-	RaftReplica map[uint64]RaftReplicaConfig `json:"raft_replica,omitempty"`
+	// Register (new) replica at the deployment time.
+	RaftReplica      map[uint64]RaftReplicaConfig `json:"raft_replica,omitempty"`
+	RaftPort         uint16                       `json:"raft_port"`
+	RaftPortMapping  map[string]uint16            `json:"raft_port_mapping,omitempty"` // optional if at each host, the port is different
+	RaftDeploymentID uint64                       `json:"raft_deployment_id"`
+
+	ModifyKey *string `json:"-"` // hidden; TODO: to be nice, to lock, only the one who have this key can modify the state.
 
 	// TODO: cloudflared configuration
 
@@ -50,4 +51,23 @@ type RaftReplicaConfig struct {
 	ID            string `json:"id"`
 	Type          string `json:"type"`
 	Description   string `json:"description"`
+}
+
+type RaftServiceConfig struct {
+	ReplicaID    uint64 `json:"replica_id"` // convenience from host
+	DeploymentID uint64 `json:"deployment_id"`
+	RaftAddress  string `json:"raft_address"`
+}
+
+type RaftHostConfig struct {
+	ReplicaID       uint64 `json:"replica_id"`
+	BaseWALDir      string `json:"base_wal_dir"`
+	BaseNodeHostDir string `json:"base_node_host_dir"`
+	RTTMillisecond  uint64 `json:"rtt_millisecond"`
+
+	ClickhouseStateStore ClickhouseStateSorageConfig `json:"clickhouse_state_store"`
+}
+
+type ClickhouseStateSorageConfig struct {
+	Address string `json:"address"`
 }

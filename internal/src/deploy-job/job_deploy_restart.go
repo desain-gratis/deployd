@@ -13,6 +13,12 @@ import (
 	"github.com/coreos/go-systemd/v22/dbus"
 )
 
+const (
+	overwriteEnvFile   = "overwrite.env"
+	dragonboatYamlFile = "dragonboat.yaml"
+	secretYamlFile     = "secret.yaml"
+)
+
 var _ Job = &restartHostService{}
 
 // restart host service
@@ -33,12 +39,14 @@ func (c *restartHostService) Execute() error {
 	// start tunnel
 
 	config := DeployConfig{
-		ServiceName: fmt.Sprintf("%v_%v", c.Job.Ns, c.Job.Request.Service.Id),
-		BuildID:     strconv.FormatUint(c.Job.Request.BuildVersion, 10),
-		EnvVersion:  strconv.FormatUint(c.Job.Request.EnvVersion, 10),
-		BaseDir:     "/opt",
-		BinPath:     c.Job.Request.Service.ExecutablePath,
-		Timeout:     30 * time.Hour,
+		ServiceName:   fmt.Sprintf("%s_%s", c.Job.Ns, c.Job.Request.Service.Id),
+		BuildID:       strconv.FormatUint(c.Job.Request.BuildVersion, 10),
+		EnvVersion:    strconv.FormatUint(c.Job.Request.EnvVersion, 10),
+		SecretVersion: strconv.FormatUint(c.Job.Request.SecretVersion, 10),
+		RaftVersion:   c.Job.Id,
+		BaseDir:       "/opt",
+		BinPath:       c.Job.Request.Service.ExecutablePath,
+		Timeout:       8 * time.Hour,
 	}
 
 	return Deploy(c.ctx, config)
@@ -47,12 +55,14 @@ func (c *restartHostService) Execute() error {
 }
 
 type DeployConfig struct {
-	ServiceName string // e.g. "deployd_user-profile"
-	BuildID     string // e.g. "20260215-abc123"
-	EnvVersion  string
-	BaseDir     string        // default: /opt
-	BinPath     string        // e.g. "bin/myapp"
-	Timeout     time.Duration // optional
+	ServiceName   string // e.g. "deployd_user-profile"
+	BuildID       string // e.g. "20260215-abc123"
+	EnvVersion    string
+	RaftVersion   string
+	SecretVersion string
+	BaseDir       string        // default: /opt
+	BinPath       string        // e.g. "bin/myapp"
+	Timeout       time.Duration // optional
 }
 
 func Deploy(ctx context.Context, cfg DeployConfig) error {
@@ -67,11 +77,15 @@ func Deploy(ctx context.Context, cfg DeployConfig) error {
 	baseDir := filepath.Join(cfg.BaseDir, cfg.ServiceName)
 	releaseDir := filepath.Join(baseDir, "build-release", cfg.BuildID)
 	envReleaseDir := filepath.Join(baseDir, "env-release", cfg.EnvVersion)
+	secretReleaseDir := filepath.Join(baseDir, "secret-release", cfg.SecretVersion)
+	raftReleaseDir := filepath.Join(baseDir, "raft-release", cfg.RaftVersion)
 
 	currentLink := filepath.Join(baseDir, "current")
 
 	etcServiceDir := filepath.Join("/etc", cfg.ServiceName)
 	etcEnvLink := filepath.Join(etcServiceDir, "env")
+	etcSecretLink := filepath.Join(etcServiceDir, "secret")
+	etcRaftLink := filepath.Join(etcServiceDir, "raft")
 
 	unitName := cfg.ServiceName + ".service"
 
@@ -88,9 +102,25 @@ func Deploy(ctx context.Context, cfg DeployConfig) error {
 	}
 
 	// Validate overwrite.env exists
-	overwriteEnvPath := filepath.Join(envReleaseDir, "overwrite.env")
+	overwriteEnvPath := filepath.Join(envReleaseDir, overwriteEnvFile)
 	if _, err := os.Stat(overwriteEnvPath); err != nil {
 		return fmt.Errorf("overwrite.env not found in env-release: %s", overwriteEnvPath)
+	}
+
+	// Validate secret-release exists (if provided)
+	if cfg.SecretVersion != "" {
+		secretInfo, err := os.Stat(secretReleaseDir)
+		if err != nil || !secretInfo.IsDir() {
+			return fmt.Errorf("secret-release directory not found: %s", secretReleaseDir)
+		}
+	}
+
+	// Validate raft-release exists (if provided)
+	if cfg.RaftVersion != "" {
+		raftInfo, err := os.Stat(raftReleaseDir)
+		if err != nil || !raftInfo.IsDir() {
+			return fmt.Errorf("raft-release directory not found: %s", raftReleaseDir)
+		}
 	}
 
 	// 3️⃣ Validate binary exists
@@ -129,6 +159,8 @@ func Deploy(ctx context.Context, cfg DeployConfig) error {
 	// 7️⃣ Backup previous symlinks for rollback
 	prevBuildTarget, _ := os.Readlink(currentLink)
 	prevEnvTarget, _ := os.Readlink(etcEnvLink)
+	prevSecretTarget, _ := os.Readlink(etcSecretLink)
+	prevRaftTarget, _ := os.Readlink(etcRaftLink)
 
 	// 8️⃣ Switch build symlink
 	if err := switchSymlinkAtomic(currentLink, releaseDir); err != nil {
@@ -144,16 +176,48 @@ func Deploy(ctx context.Context, cfg DeployConfig) error {
 		return fmt.Errorf("failed to switch env symlink: %w", err)
 	}
 
+	// Switch secret symlink
+	if cfg.SecretVersion != "" {
+		if err := switchSymlinkAtomic(etcSecretLink, secretReleaseDir); err != nil {
+			rollbackAll(currentLink, prevBuildTarget,
+				etcEnvLink, prevEnvTarget,
+				etcSecretLink, prevSecretTarget,
+				etcRaftLink, prevRaftTarget,
+				conn, ctx, unitName)
+			return fmt.Errorf("failed to switch secret symlink: %w", err)
+		}
+	}
+
+	// Switch raft symlink
+	if cfg.RaftVersion != "" {
+		if err := switchSymlinkAtomic(etcRaftLink, raftReleaseDir); err != nil {
+			rollbackAll(currentLink, prevBuildTarget,
+				etcEnvLink, prevEnvTarget,
+				etcSecretLink, prevSecretTarget,
+				etcRaftLink, prevRaftTarget,
+				conn, ctx, unitName)
+			return fmt.Errorf("failed to switch raft symlink: %w", err)
+		}
+	}
+
 	// 🔟 Start service
 	if err := startService(ctx, conn, unitName); err != nil {
-		rollback(currentLink, prevBuildTarget, etcEnvLink, prevEnvTarget, conn, ctx, unitName)
+		rollbackAll(currentLink, prevBuildTarget,
+			etcEnvLink, prevEnvTarget,
+			etcSecretLink, prevSecretTarget,
+			etcRaftLink, prevRaftTarget,
+			conn, ctx, unitName)
 		return fmt.Errorf("start failed, rolled back: %w", err)
 	}
 
 	// 1️⃣1️⃣ Verify active state
 	active, err := isActive(ctx, conn, unitName)
 	if err != nil || !active {
-		rollback(currentLink, prevBuildTarget, etcEnvLink, prevEnvTarget, conn, ctx, unitName)
+		rollbackAll(currentLink, prevBuildTarget,
+			etcEnvLink, prevEnvTarget,
+			etcSecretLink, prevSecretTarget,
+			etcRaftLink, prevRaftTarget,
+			conn, ctx, unitName)
 		return fmt.Errorf("service failed health check after start: %v", err)
 	}
 
@@ -220,9 +284,11 @@ func switchSymlinkAtomic(linkPath, newTarget string) error {
 	return os.Rename(tmpLink, linkPath)
 }
 
-func rollback(
-	buildLink, prevBuild,
+func rollbackAll(
+	buildLink, prevBuild string,
 	envLink, prevEnv string,
+	secretLink, prevSecret string,
+	raftLink, prevRaft string,
 	conn *dbus.Conn,
 	ctx context.Context,
 	unit string,
@@ -232,6 +298,12 @@ func rollback(
 	}
 	if prevEnv != "" {
 		_ = switchSymlinkAtomic(envLink, prevEnv)
+	}
+	if prevSecret != "" {
+		_ = switchSymlinkAtomic(secretLink, prevSecret)
+	}
+	if prevRaft != "" {
+		_ = switchSymlinkAtomic(raftLink, prevRaft)
 	}
 	_ = startService(ctx, conn, unit)
 }

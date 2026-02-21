@@ -37,14 +37,26 @@ type HostDeploymentJobState struct {
 
 const minimumTimeOutIfConfiguredSeconds = 30
 
-func (w *jobsController) configureHost(out notifier.Topic, jobDefinition entity.DeploymentJob) {
+func (w *jobsController) initializeDeployment(out notifier.Topic, jobDefinition entity.DeploymentJob) {
+	log := w.log
+
+	var proceed bool
+	for _, host := range jobDefinition.Target {
+		proceed = proceed || host.Host == w.host.Host
+	}
+	if !proceed {
+		log.Debug("received job that is not for this host")
+		return
+	}
+
+	// local state
 	state := &HostDeploymentJobState{
 		ConfigurationStatus:  entity.HostConfigurationStatusPending,
 		RestartServiceStatus: entity.HostRestartServiceStatusPending,
 	}
 
 	name := "configure-job-" + jobDefinition.Id
-	log := w.log.
+	log = w.log.
 		With("namespace", jobDefinition.Ns).
 		With("job_id", jobDefinition.Id).
 		With("id", getKey(jobDefinition)). // instance id
@@ -59,6 +71,7 @@ func (w *jobsController) configureHost(out notifier.Topic, jobDefinition entity.
 
 	if _, ok := jobDefinition.ConfigureHostJob.Status[w.host.Host]; !ok {
 		// not part of the deployment worker
+		log.Debug("received job that is not for this host")
 		return
 	}
 

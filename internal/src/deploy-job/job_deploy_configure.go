@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/v22/dbus"
+	"github.com/desain-gratis/deployd/src/entity"
+	"github.com/spf13/viper"
 )
 
 var _ Job = &configureHost{}
@@ -38,34 +40,56 @@ func (a *configureHost) Execute() error {
 		return err
 	}
 
-	basePath := fmt.Sprintf("/opt/%v_%v", a.Job.Request.Ns, a.Job.Request.Service.Id)
+	// Make sure the required release version directory is there in the host
 
-	log.Info("ensuring path", "path", basePath, "progress", progress)
+	basePath := fmt.Sprintf("/opt/%s_%s", a.Job.Request.Ns, a.Job.Request.Service.Id)
+
+	log.Info("ensuring service base path")
 	err := ensureDir(basePath)
 	if err != nil {
 		return fmt.Errorf("error while ensuring directory in base path %v %w", basePath, err)
 	}
 
-	envPath := fmt.Sprintf(basePath+"/env-release/%v", a.Job.Request.EnvVersion)
-	log.Info("ensuring path", "path", envPath)
+	envPath := fmt.Sprintf(basePath+"/env-release/%d", a.Job.Request.EnvVersion)
+	log.Info("ensuring env release path " + envPath)
 	err = ensureDir(envPath)
 	if err != nil {
 		return fmt.Errorf("error while ensuring env path %v %w", envPath, err)
 	}
 
-	etcPath := fmt.Sprintf("/etc/%v_%v", a.Job.Request.Ns, a.Job.Request.Service.Id)
-	log.Info("ensuring path", "path", etcPath)
+	secretPath := fmt.Sprintf(basePath+"/secret-release/%d", a.Job.Request.SecretVersion)
+	log.Info("ensuring secret release path " + secretPath)
+	err = ensureDir(secretPath)
+	if err != nil {
+		return fmt.Errorf("error while ensuring secret path %v %w", secretPath, err)
+	}
+
+	raftPath := fmt.Sprintf(basePath+"/raft-release/%s", a.Job.Id) // raft is based on id, and it's a string
+	log.Info("ensuring raft release path " + raftPath)
+	err = ensureDir(raftPath)
+	if err != nil {
+		return fmt.Errorf("error while ensuring raft path %v %w", raftPath, err)
+	}
+
+	// Make sure that the service has already a current /etc directory
+
+	etcPath := fmt.Sprintf("/etc/%s_%s", a.Job.Request.Ns, a.Job.Request.Service.Id)
+	log.Info("ensuring etc (config) path")
 	err = ensureDir(etcPath)
 	if err != nil {
 		return fmt.Errorf("error while ensuring etc path %v %w", etcPath, err)
 	}
 
-	tmpPath := fmt.Sprintf("/tmp/%s_%s/artifact/%v", a.Job.Request.Ns, a.Job.Request.Service.Id, a.Job.Request.BuildVersion)
+	// Make sure that the service has already a current /tmp directory for temporary artifact download
+
+	tmpPath := fmt.Sprintf("/tmp/%s_%s/artifact%s", a.Job.Request.Ns, a.Job.Request.Service.Id, a.Job.Request.BuildVersion)
 	log.Info("ensuring path", "tmp", tmpPath)
 	err = ensureDir(tmpPath)
 	if err != nil {
 		return fmt.Errorf("error while ensuring tmp path %v %w", tmpPath, err)
 	}
+
+	// Make sure the service's systemd is there
 
 	systemdPath := "/etc/systemd/system"
 	log.Info("ensuring path", "path", systemdPath)
@@ -74,15 +98,13 @@ func (a *configureHost) Execute() error {
 		return fmt.Errorf("error while ensuring systemd path %v %w", systemdPath, err)
 	}
 
-	// write systemd
-	progress = 1 / float64(4)
-
+	// Write the application systemd unit file
 	log.Info("writing unit file", "progress", progress)
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
-	serviceName := fmt.Sprintf("%v_%v.service", a.Job.Request.Ns, a.Job.Request.Service.Id)
+	serviceName := fmt.Sprintf("%s_%s.service", a.Job.Request.Ns, a.Job.Request.Service.Id)
 
 	err = func() error {
 		content := BuildUnit(a.Job.Request.Ns, a.Job.Request.Service.Id, a.Job.Request.Service.Description, a.Job.Request.Service.ExecutablePath)
@@ -151,7 +173,87 @@ func (a *configureHost) Execute() error {
 		return err
 	}
 
-	buildReleasePath := fmt.Sprintf(basePath+"/build-release/%v", a.Job.Request.BuildVersion)
+	log.Info("downloading secret as .yaml")
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	err = func() error {
+		secretData, err := a.dependencies.SecretUsecase.Get(ctx, a.Job.Request.Ns, []string{a.Job.Request.Service.Id}, strconv.FormatUint(a.Job.Request.SecretVersion, 10))
+		if err != nil {
+			return fmt.Errorf("error while downloading env %w", err)
+		}
+
+		if len(secretData) == 0 {
+			return nil
+		}
+
+		secret := secretData[0]
+
+		type kv struct {
+			key string
+			v   string
+		}
+
+		tmpSecret := make([]kv, 0, len(secret.Value))
+		for k, v := range secret.Value {
+			tmpSecret = append(tmpSecret, kv{k, v})
+		}
+
+		sort.Slice(tmpSecret, func(i, j int) bool {
+			return strings.Compare(tmpSecret[i].key, tmpSecret[j].key) < 0
+		})
+
+		log.Info("writing .yaml")
+
+		path := secretPath + "/" + secretYamlFile
+
+		f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+		if err != nil {
+			return fmt.Errorf("error while opening env file in %v %w", path, err)
+		}
+		defer f.Close()
+
+		v := viper.New()
+		v.SetConfigType("yaml")
+
+		for _, secret := range tmpSecret {
+			// todo validatemaxxing
+			v.Set(secret.key, secret.v)
+		}
+
+		err = v.WriteConfigTo(f)
+		if err != nil {
+			return fmt.Errorf("failed to write .yaml secret %w", err)
+		}
+
+		return nil
+	}()
+	if err != nil {
+		return err
+	}
+
+	log.Info("downloading raft config as .yaml")
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// For consistency, use the host snapshotted in the deploy job request
+	currentHost := a.host
+	for _, host := range a.Job.Target {
+		if host.Host == a.host.Host {
+			currentHost = a.host
+		}
+	}
+
+	err = configureRaft(log, raftPath, currentHost, &a.Job)
+	if err != nil {
+		return err
+	}
+
+	// download archive
+
+	buildReleasePath := fmt.Sprintf(basePath+"/build-release/%d", a.Job.Request.BuildVersion)
 	err = ensureDir(buildReleasePath)
 	if err != nil {
 		return fmt.Errorf("error while ensuring build release path in %v %w", buildReleasePath, err)
@@ -188,7 +290,7 @@ func (a *configureHost) Execute() error {
 			ctx,
 			a.Job.Request.Ns,
 			[]string{a.Job.Request.Service.Id, buildId},
-			fmt.Sprintf("%v/%v", a.host.OS, a.host.Architecture), // attachment can have one to many, so we're restricting to one
+			fmt.Sprintf("%s/%s", a.host.OS, a.host.Architecture), // attachment can have one to many, so we're restricting to one
 		)
 		if err != nil {
 			return fmt.Errorf("error while getting build artifact: %w", err)
@@ -307,4 +409,88 @@ func isEmptyDir(dir string) (bool, error) {
 	}
 
 	return false, nil // has at least one entry
+}
+
+// todo refactor to make it more natural, eg. by using context
+func configureRaft(log *slog.Logger, raftPath string, currentHost *entity.Host, job *entity.DeploymentJob) error {
+	replicaConfig := job.RaftConfig.Replica
+
+	type kv struct {
+		key uint64
+		v   entity.RaftReplicaConfig
+	}
+
+	// hostConfig := job.Target[0]
+
+	// Use currentHost from config; to make it more consistent
+	var hostc *entity.Host
+	for _, host := range job.Target {
+		if host.Host == currentHost.Host {
+			hostc = &host
+		}
+	}
+	if hostc == nil {
+		return nil // fmt.Errorf("should not be deployed here.")
+	}
+
+	tmpRaftConfig := make([]kv, 0, len(replicaConfig))
+	for shardID, v := range replicaConfig {
+		tmpRaftConfig = append(tmpRaftConfig, kv{shardID, v})
+	}
+
+	sort.Slice(tmpRaftConfig, func(i, j int) bool {
+		return int(tmpRaftConfig[i].key)-int(tmpRaftConfig[j].key) < 0
+	})
+
+	log.Info("writing .yaml")
+
+	path := raftPath + "/" + dragonboatYamlFile
+
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return fmt.Errorf("error while opening env file in %v %w", path, err)
+	}
+	defer f.Close()
+
+	v := viper.New()
+	v.SetConfigType("yaml")
+
+	raftService := job.RaftConfig.Service[currentHost.Host]
+
+	v.Set("host.replica_id", currentHost.RaftConfig.ReplicaID)
+	v.Set("host.raft_address", raftService.RaftAddress)
+	v.Set("host.wal_dir", fmt.Sprintf("%s/%s_%s", currentHost.RaftConfig.BaseWALDir, job.Ns, job.Request.Service.Id))
+	v.Set("host.nodehost_dir", fmt.Sprintf("%s/%s_%s", currentHost.RaftConfig.BaseNodeHostDir, job.Ns, job.Request.Service.Id))
+	v.Set("host.deployment_id", raftService.DeploymentID)
+	v.Set("host.clickhouse.address", currentHost.RaftConfig.ClickhouseStateStore.Address)
+
+	peers := make(map[uint64]string)
+	for _, peer := range job.RaftConfig.Service {
+		peers[peer.ReplicaID] = peer.RaftAddress
+	}
+	v.Set("host.peer", peers)
+
+	for shardID, replicaConfig := range tmpRaftConfig {
+		var isBootstrap bool
+		if replicaConfig.v.BootstrapHost == currentHost.Host {
+			isBootstrap = true
+		}
+
+		// todo: find more elegant way..
+		// _ = shardID
+		// _ = isBootstrap
+		v.Set(fmt.Sprintf("replica.%v.shard_id", shardID), shardID)
+		v.Set(fmt.Sprintf("replica.%v.bootstrap", shardID), isBootstrap)
+		v.Set(fmt.Sprintf("replica.%v.id", shardID), replicaConfig.v.ID)
+		v.Set(fmt.Sprintf("replica.%v.alias", shardID), replicaConfig.v.Description)
+		v.Set(fmt.Sprintf("replica.%v.description", shardID), replicaConfig.v.Description)
+		v.Set(fmt.Sprintf("replica.%v.type", shardID), replicaConfig.v.Type)
+	}
+
+	err = v.WriteConfigTo(f)
+	if err != nil {
+		return fmt.Errorf("failed to write .yaml secret %w", err)
+	}
+
+	return nil
 }
