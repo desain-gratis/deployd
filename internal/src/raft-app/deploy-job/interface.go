@@ -16,8 +16,9 @@ type (
 	EventServiceRestarted     HostRestartServiceUpdateResponse
 	EventServiceRestartUpdate HostRestartServiceUpdateResponse
 	EventAllServiceRestarted  HostRestartServiceUpdateResponse
-	EventDeploymentJobFailed  HostRestartServiceUpdateResponse
-	EventDeploymentJobSuccess HostRestartServiceUpdateResponse
+
+	EventDeploymentJobFailed  CommonResponse
+	EventDeploymentJobSuccess CommonResponse
 
 	// Lets go deploy
 	EventRestartConfirmed HostRestartConfirmationResponse
@@ -55,10 +56,7 @@ type ConfigurationUpdateRequest struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-type ConfigurationUpdateResponse struct {
-	TriggerHost string               `json:"trigger_host"`
-	Job         entity.DeploymentJob `json:"job"`
-}
+type ConfigurationUpdateResponse CommonResponse
 
 type RestartConfirmation struct {
 	Ns      string `json:"namespace"`
@@ -75,11 +73,14 @@ type RestartConfirmation struct {
 }
 
 type HostRestartServiceUpdateResponse struct {
-	Step        int                  `json:"current_step"`
-	TargetHost  string               `json:"target_host"`
-	Job         entity.DeploymentJob `json:"job"`
+	CommonResponse
+	Step int `json:"current_step"`
+}
+
+type CommonResponse struct {
 	TriggerHost string               `json:"trigger_host"`
-	Failed      bool                 `json:"failed"`
+	Job         entity.DeploymentJob `json:"job"`
+	Failed      bool                 `json:"failed,omitempty"`
 	FailReason  *string              `json:"fail_reason,omitempty"`
 }
 

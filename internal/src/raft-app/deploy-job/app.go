@@ -252,12 +252,16 @@ func (m *raftApp) applyHostConfigurationUpdate(ctx context.Context, request Conf
 		Status:       request.Status,
 		ErrorMessage: request.ErrorMessage,
 	}
-	// TODO: dontuse serviceHost, just use the jobUsecase
+
+	// TODO: more elegant state handling and host timeout. (use leader)
 
 	// if all host is configured; we go!!!
 	allHostConfigured := true
+	markFailed := false
+	var failReason *string
 	for _, hostConfigStatus := range job.ConfigureHostJob.Status {
 		allHostConfigured = allHostConfigured && hostConfigStatus.Status == entity.HostConfigurationStatusSuccess
+		markFailed = markFailed || job.ConfigureHostJob.Status[request.HostName].Status == entity.HostConfigurationStatusFailed
 	}
 
 	if allHostConfigured {
@@ -273,6 +277,12 @@ func (m *raftApp) applyHostConfigurationUpdate(ctx context.Context, request Conf
 		}
 	}
 
+	if markFailed {
+		job.Status = entity.DeploymentJobStatusFailed
+		msg := "a host failed configuration"
+		failReason = &msg
+	}
+
 	job, err = m.jobUsecase.Post(ctx, job, nil)
 	if err != nil {
 		return nil, err
@@ -281,6 +291,8 @@ func (m *raftApp) applyHostConfigurationUpdate(ctx context.Context, request Conf
 	resp := ConfigurationUpdateResponse{
 		Job:         *job,
 		TriggerHost: request.HostName,
+		Failed:      markFailed,
+		FailReason:  failReason,
 	}
 	encResult, err := json.Marshal(resp)
 	if err != nil {
@@ -290,14 +302,20 @@ func (m *raftApp) applyHostConfigurationUpdate(ctx context.Context, request Conf
 	return func() (raft.Result, error) {
 		// This server is configured..
 		if job.ConfigureHostJob.Status[request.HostName].Status == entity.HostConfigurationStatusSuccess {
+			// it's configured
 			m.topic.Broadcast(context.Background(), EventHostConfigured(resp))
+
+			if allHostConfigured {
+				// All server is configured ! LETS GOOO
+				m.topic.Broadcast(context.Background(), EventAllHostConfigured(resp))
+			}
 		} else {
+			// ordinary update
 			m.topic.Broadcast(context.Background(), EventHostConfigurationUpdate(resp))
 		}
 
-		if allHostConfigured {
-			// All server is configured ! LETS GOOO
-			m.topic.Broadcast(context.Background(), EventAllHostConfigured(resp))
+		if markFailed {
+			m.topic.Broadcast(context.Background(), EventDeploymentJobFailed(resp))
 		}
 
 		return raft.Result{Data: encResult}, nil
@@ -392,8 +410,10 @@ func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request Hos
 		}
 
 		resp := HostRestartServiceUpdateResponse{
-			Failed:     true,
-			FailReason: request.ErrorMessage,
+			CommonResponse: CommonResponse{
+				Failed:     true,
+				FailReason: request.ErrorMessage,
+			},
 		}
 
 		encResult, err := json.Marshal(resp)
@@ -403,7 +423,7 @@ func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request Hos
 		}
 
 		return func() (raft.Result, error) {
-			m.topic.Broadcast(context.Background(), EventDeploymentJobFailed(resp))
+			m.topic.Broadcast(context.Background(), EventDeploymentJobFailed(resp.CommonResponse))
 			return raft.Result{Data: encResult, Value: 0}, nil
 		}, nil
 	}
@@ -417,8 +437,10 @@ func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request Hos
 		}
 
 		resp := HostRestartServiceUpdateResponse{
-			Job:         *job,
-			TriggerHost: request.HostName,
+			CommonResponse: CommonResponse{
+				Job:         *job,
+				TriggerHost: request.HostName,
+			},
 		}
 
 		encResult, err := json.Marshal(resp)
@@ -456,8 +478,10 @@ func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request Hos
 		}
 
 		resp := HostRestartServiceUpdateResponse{
-			Job:         *job,
-			TriggerHost: request.HostName,
+			CommonResponse: CommonResponse{
+				Job:         *job,
+				TriggerHost: request.HostName,
+			},
 		}
 
 		encResult, err := json.Marshal(resp)
@@ -470,7 +494,7 @@ func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request Hos
 			// notify the good news
 			m.topic.Broadcast(context.Background(), EventServiceRestarted(resp))
 			m.topic.Broadcast(context.Background(), EventAllServiceRestarted(resp))
-			m.topic.Broadcast(context.Background(), EventDeploymentJobSuccess(resp))
+			m.topic.Broadcast(context.Background(), EventDeploymentJobSuccess(resp.CommonResponse))
 			return raft.Result{Data: encResult, Value: 0}, nil
 		}, nil
 	}
@@ -483,9 +507,10 @@ func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request Hos
 	}
 
 	resp := HostRestartServiceUpdateResponse{
-		Job:         *job,
-		TriggerHost: request.HostName,
-		// the next target can be looked up from job
+		CommonResponse: CommonResponse{
+			Job:         *job,
+			TriggerHost: request.HostName,
+		},
 	}
 
 	encResult, err := json.Marshal(job)
@@ -607,19 +632,6 @@ func parseAs[T any](payload []byte) (T, error) {
 	var t T
 	err := json.Unmarshal(payload, &t)
 	return t, err
-}
-
-func validateReplica(rep map[uint64]entity.RaftReplicaConfig) error {
-	var err error
-	for shardID, rep := range rep {
-		if rep.ID == "" {
-			err = errors.Join(err, fmt.Errorf("emptyr eplica ID for shard %v", shardID))
-		}
-		if rep.Type == "" {
-			err = errors.Join(err, fmt.Errorf("empty replica type for shard %v", shardID))
-		}
-	}
-	return err
 }
 
 func initDeploymentJobState(job *entity.DeploymentJob) {
