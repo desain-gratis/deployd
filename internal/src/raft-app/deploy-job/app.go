@@ -164,7 +164,7 @@ func (m *raftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploy
 	job.Request = &request
 
 	// for convenience
-	job.Request.TargetHosts = nil
+	// job.Request.TargetHosts = nil
 
 	initDeploymentJobState(&job)
 

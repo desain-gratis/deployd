@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -247,26 +246,30 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 
 	// real-time deploy job state update
 	router.GET("/deployd/job/tail", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		reqNs := r.Header.Get("X-Namespace")
+		reqNs := r.URL.Query().Get("namespace")
+		srvId := r.URL.Query().Get("service")
 		reqId := r.URL.Query().Get("id")
-		handler.TailTransform(filterDeploymentJob(reqNs, reqId), transformDeployJobEvent)(w, r, p)
+		handler.TailTransform(filterDeploymentJob(reqNs, srvId, reqId), transformDeployJobEvent)(w, r, p)
 	})
 	router.GET("/deployd/job/tail/ws", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		reqNs := r.Header.Get("X-Namespace")
+		reqNs := r.URL.Query().Get("namespace")
+		srvId := r.URL.Query().Get("service")
 		reqId := r.URL.Query().Get("id")
-		handler.Websocket(ctx, wsWhitelist, filterDeploymentJob(reqNs, reqId), transformDeployJobEvent)(w, r, p)
+		handler.Websocket(ctx, wsWhitelist, filterDeploymentJob(reqNs, srvId, reqId), transformDeployJobEvent)(w, r, p)
 	})
 
 	// real-time worker log and state update
 	router.GET("/worker/deployment/tail", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		reqNs := r.Header.Get("X-Namespace")
+		reqNs := r.URL.Query().Get("namespace")
+		srvId := r.URL.Query().Get("service")
 		reqId := r.URL.Query().Get("id")
-		handler.TailTransform(filterWorkerLog(reqNs, reqId), toJson)(w, r, p)
+		handler.TailTransform(filterWorkerLog(reqNs, srvId, reqId))(w, r, p)
 	})
 	router.GET("/worker/deployment/tail/ws", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		reqNs := r.Header.Get("X-Namespace")
+		reqNs := r.URL.Query().Get("namespace")
+		srvId := r.URL.Query().Get("service")
 		reqId := r.URL.Query().Get("id")
-		handler.Websocket(ctx, wsWhitelist, filterWorkerLog(reqNs, reqId), toJson)(w, r, p)
+		handler.Websocket(ctx, wsWhitelist, filterWorkerLog(reqNs, srvId, reqId))(w, r, p)
 	})
 }
 
@@ -539,33 +542,28 @@ func withCors(router http.Handler) http.Handler {
 	})
 }
 
-func toJson(msg any) any {
-	payload, _ := json.Marshal(msg)
-	return string(payload)
-}
-
-func filterDeploymentJob(reqNs, reqId string) func(any) bool {
+func filterDeploymentJob(reqNs, reqService, reqId string) func(any) bool {
 	return func(msg any) bool {
-		var ns, id string
+		var ns, srv, id string
 		switch t := msg.(type) {
 		case deployjob.EventDeploymentJobCreated:
-			ns, id = t.Job.Ns, t.Job.Id
+			ns, srv, id = t.Job.Ns, t.Job.Request.Service.Id, t.Job.Id
 		case deployjob.EventHostConfigurationUpdate:
-			ns, id = t.Job.Ns, t.Job.Id
+			ns, srv, id = t.Job.Ns, t.Job.Request.Service.Id, t.Job.Id
 		case deployjob.EventHostConfigured:
-			ns, id = t.Job.Ns, t.Job.Id
+			ns, srv, id = t.Job.Ns, t.Job.Request.Service.Id, t.Job.Id
 		case deployjob.EventAllHostConfigured:
-			ns, id = t.Job.Ns, t.Job.Id
+			ns, srv, id = t.Job.Ns, t.Job.Request.Service.Id, t.Job.Id
 		case deployjob.EventRestartConfirmed:
-			ns, id = t.Job.Ns, t.Job.Id
+			ns, srv, id = t.Job.Ns, t.Job.Request.Service.Id, t.Job.Id
 		case deployjob.EventServiceRestarted:
-			ns, id = t.Job.Ns, t.Job.Id
+			ns, srv, id = t.Job.Ns, t.Job.Request.Service.Id, t.Job.Id
 		case deployjob.EventServiceRestartUpdate:
-			ns, id = t.Job.Ns, t.Job.Id
+			ns, srv, id = t.Job.Ns, t.Job.Request.Service.Id, t.Job.Id
 		case deployjob.EventAllServiceRestarted:
-			ns, id = t.Job.Ns, t.Job.Id
+			ns, srv, id = t.Job.Ns, t.Job.Request.Service.Id, t.Job.Id
 		case deployjob.EventDeploymentJobSuccess:
-			ns, id = t.Job.Ns, t.Job.Id
+			ns, srv, id = t.Job.Ns, t.Job.Request.Service.Id, t.Job.Id
 		case deployjobintegration.Log:
 			return true
 		}
@@ -582,12 +580,16 @@ func filterDeploymentJob(reqNs, reqId string) func(any) bool {
 		if reqNs == "*" {
 			nsMatch = true
 		}
+		srvMatch := reqService == srv
+		if reqService == "" {
+			srvMatch = true
+		}
 
-		return !(nsMatch && idMatch)
+		return !(nsMatch && idMatch && srvMatch)
 	}
 }
 
-func filterWorkerLog(reqNs, reqId string) func(any) bool {
+func filterWorkerLog(reqNs, reqSrv, reqId string) func(any) bool {
 	return func(msg any) bool {
 		lg, ok := msg.(deployjobintegration.Log)
 		if !ok {
@@ -603,7 +605,12 @@ func filterWorkerLog(reqNs, reqId string) func(any) bool {
 			nsMatch = true
 		}
 
-		return !(nsMatch && idMatch)
+		srvMatch := reqSrv == lg["service"]
+		if reqSrv == "" {
+			srvMatch = true
+		}
+
+		return !(nsMatch && idMatch && srvMatch)
 	}
 }
 
@@ -645,15 +652,13 @@ func transformDeployJobEvent(msg any) any {
 		return "-"
 	}
 
-	// make it slimmer
 	job.RaftConfig = nil
 	job.Target = nil
 	job.Request = nil
 
-	payload, _ := json.Marshal(map[string]any{
+	// make it fair so it's like the websocket
+	return map[string]any{
 		"table": eventName,
 		"job":   job,
-	})
-
-	return string(payload)
+	}
 }
