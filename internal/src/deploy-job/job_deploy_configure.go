@@ -82,7 +82,7 @@ func (a *configureHost) Execute() error {
 
 	// Make sure that the service has already a current /tmp directory for temporary artifact download
 
-	tmpPath := fmt.Sprintf("/tmp/%s_%s/artifact%s", a.Job.Request.Ns, a.Job.Request.Service.Id, a.Job.Request.BuildVersion)
+	tmpPath := fmt.Sprintf("/tmp/%s_%s/artifact/%d", a.Job.Request.Ns, a.Job.Request.Service.Id, a.Job.Request.BuildVersion)
 	log.Info("ensuring path", "tmp", tmpPath)
 	err = ensureDir(tmpPath)
 	if err != nil {
