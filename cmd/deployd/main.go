@@ -239,6 +239,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	wsWhitelist := []string{
 		"http://localhost:*", "http://localhost",
 		"http://mb1:*", "http://mb2:*", "http://mb3:*",
+		"http://mb1", "http://mb2", "http://mb3",
 	}
 
 	// job read; non-websocket version
