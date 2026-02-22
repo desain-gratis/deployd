@@ -235,17 +235,77 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 
 	integration.Event.StartConsumer(jobTopic, subscription)
 
-	handler := notifier_api.NewTopicAPI(jobTopic, topicRender)
-	router.GET("/deployd/job/tail", handler.Tail)
-	router.GET("/deployd/job/stat", handler.Metrics)
-
-	router.GET("/worker/deployment/tail", handler.TailFilterOut(filterLog))
-
-	whitelist := []string{
+	handler := notifier_api.NewTopicAPI(jobTopic)
+	// websocket version
+	wsWhitelist := []string{
 		"http://localhost:*", "http://localhost",
 		"http://mb1:*", "http://mb2:*", "http://mb3:*",
 	}
-	router.GET("/worker/deployment/ws", handler.Websocket(ctx, whitelist, filterLog))
+
+	// job read; non-websocket version
+	router.GET("/deployd/job/stat", handler.Metrics)
+
+	// real-time deploy job state update
+	router.GET("/deployd/job/tail", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		reqNs := r.Header.Get("X-Namespace")
+		reqId := r.URL.Query().Get("id")
+		handler.TailTransform(filterDeploymentJob(reqNs, reqId), transformDeployJobEvent)(w, r, p)
+	})
+	router.GET("/deployd/job/tail/ws", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		reqNs := r.Header.Get("X-Namespace")
+		reqId := r.URL.Query().Get("id")
+		handler.Websocket(ctx, wsWhitelist, filterDeploymentJob(reqNs, reqId), transformDeployJobEvent)(w, r, p)
+	})
+
+	// real-time worker log and state update
+	router.GET("/worker/deployment/tail", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		reqNs := r.Header.Get("X-Namespace")
+		reqId := r.URL.Query().Get("id")
+		handler.TailTransform(filterLog(reqNs, reqId))(w, r, p)
+	})
+	router.GET("/worker/deployment/tail/ws", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		reqNs := r.Header.Get("X-Namespace")
+		reqId := r.URL.Query().Get("id")
+		handler.Websocket(ctx, wsWhitelist, filterLog(reqNs, reqId))(w, r, p)
+	})
+}
+
+func filterDeploymentJob(reqNs, reqId string) func(any) bool {
+	return func(msg any) bool {
+		var ns, id string
+		switch t := msg.(type) {
+		case deployjob.EventDeploymentJobCreated:
+			ns, id = t.Job.Ns, t.Job.Id
+		case deployjob.EventHostConfigurationUpdate:
+			ns, id = t.Job.Ns, t.Job.Id
+		case deployjob.EventHostConfigured:
+			ns, id = t.Job.Ns, t.Job.Id
+		case deployjob.EventAllHostConfigured:
+			ns, id = t.Job.Ns, t.Job.Id
+		case deployjob.EventRestartConfirmed:
+			ns, id = t.Job.Ns, t.Job.Id
+		case deployjob.EventServiceRestarted:
+			ns, id = t.Job.Ns, t.Job.Id
+		case deployjob.EventServiceRestartUpdate:
+			ns, id = t.Job.Ns, t.Job.Id
+		case deployjob.EventAllServiceRestarted:
+			ns, id = t.Job.Ns, t.Job.Id
+		case deployjob.EventDeploymentJobSuccess:
+			ns, id = t.Job.Ns, t.Job.Id
+		case deployjobintegration.Log:
+			return true
+		}
+
+		if ns == "" || id == "" {
+			return true
+		}
+
+		if reqNs == ns && reqId == id {
+			return false
+		}
+
+		return true
+	}
 }
 
 func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
@@ -545,11 +605,57 @@ func topicRender(v any) any {
 	}
 }
 
-func filterLog(msg any) bool {
-	if _, ok := msg.(deployjobintegration.Log); !ok {
+func filterLog(reqNs, reqId string) func(any) bool {
+	return func(msg any) bool {
+		if lg, ok := msg.(deployjobintegration.Log); !ok {
+			if lg.Record["namespace"] == reqNs && lg.Record["job_id"] == reqId {
+				return false
+			}
+			return true
+		}
 		return true
 	}
-	return false
+}
+
+func transformDeployJobEvent(msg any) any {
+	var eventName string
+	var job *entity.DeploymentJob
+
+	switch value := msg.(type) {
+	case deployjob.EventDeploymentJobCreated:
+		eventName = "deployment-created"
+		job = &value.Job
+	case deployjob.EventHostConfigurationUpdate:
+		eventName = "host-configuration-update"
+		job = &value.Job
+	case deployjob.EventHostConfigured:
+		eventName = "host-configured"
+		job = &value.Job
+	case deployjob.EventRestartConfirmed:
+		eventName = "service-restart-confirmed"
+		job = &value.Job
+	case deployjob.EventServiceRestarted:
+		eventName = "service-restarted"
+		job = &value.Job
+	case deployjob.EventServiceRestartUpdate:
+		eventName = "service-restart-update"
+		job = &value.Job
+	case deployjob.EventAllHostConfigured:
+		eventName = "all-host-configured"
+		job = &value.Job
+	case deployjob.EventAllServiceRestarted:
+		eventName = "all-service-restarted"
+		job = &value.Job
+	case deployjob.EventDeploymentJobSuccess:
+		eventName = "deployment-success"
+		job = &value.Job
+	default:
+	}
+
+	return map[string]any{
+		"table": eventName,
+		"job":   job,
+	}
 }
 
 func topicRenderWorkerOnly(v any) any {

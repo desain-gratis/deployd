@@ -9,12 +9,15 @@ import (
 type (
 	EventDeploymentJobCreated SubmitJobResponse
 
-	EventAllHostConfigured ConfigurationUpdateResponse
-	EventHostConfigured    ConfigurationUpdateResponse
+	EventAllHostConfigured       ConfigurationUpdateResponse
+	EventHostConfigured          ConfigurationUpdateResponse
+	EventHostConfigurationUpdate ConfigurationUpdateResponse
 
-	EventServiceRestarted    HostRestartServiceUpdateResponse
-	EventAllServiceRestarted HostRestartServiceUpdateResponse
-	EventDeploymentFailed    HostRestartServiceUpdateResponse
+	EventServiceRestarted     HostRestartServiceUpdateResponse
+	EventServiceRestartUpdate HostRestartServiceUpdateResponse
+	EventAllServiceRestarted  HostRestartServiceUpdateResponse
+	EventDeploymentJobFailed  HostRestartServiceUpdateResponse
+	EventDeploymentJobSuccess HostRestartServiceUpdateResponse
 
 	// Lets go deploy
 	EventRestartConfirmed HostRestartConfirmationResponse
@@ -53,8 +56,8 @@ type ConfigurationUpdateRequest struct {
 }
 
 type ConfigurationUpdateResponse struct {
-	TriggerHost string                `json:"trigger_host"`
-	Job         *entity.DeploymentJob `json:"job"`
+	TriggerHost string               `json:"trigger_host"`
+	Job         entity.DeploymentJob `json:"job"`
 }
 
 type RestartConfirmation struct {

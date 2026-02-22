@@ -189,10 +189,7 @@ func (m *raftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploy
 	}
 
 	return func() (raft.Result, error) {
-		if resp.SubmitJobStatus == SubmitJobStatusSuccess {
-			m.topic.Broadcast(context.Background(), EventDeploymentJobCreated(resp))
-		}
-
+		m.topic.Broadcast(context.Background(), EventDeploymentJobCreated(resp))
 		return raft.Result{Value: 0, Data: encResult}, nil
 	}, nil
 }
@@ -282,7 +279,7 @@ func (m *raftApp) applyHostConfigurationUpdate(ctx context.Context, request Conf
 	}
 
 	resp := ConfigurationUpdateResponse{
-		Job:         job,
+		Job:         *job,
 		TriggerHost: request.HostName,
 	}
 	encResult, err := json.Marshal(resp)
@@ -292,7 +289,11 @@ func (m *raftApp) applyHostConfigurationUpdate(ctx context.Context, request Conf
 
 	return func() (raft.Result, error) {
 		// This server is configured..
-		m.topic.Broadcast(context.Background(), EventHostConfigured(resp))
+		if job.ConfigureHostJob.Status[request.HostName].Status == entity.HostConfigurationStatusSuccess {
+			m.topic.Broadcast(context.Background(), EventHostConfigured(resp))
+		} else {
+			m.topic.Broadcast(context.Background(), EventHostConfigurationUpdate(resp))
+		}
 
 		if allHostConfigured {
 			// All server is configured ! LETS GOOO
@@ -402,7 +403,7 @@ func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request Hos
 		}
 
 		return func() (raft.Result, error) {
-			m.topic.Broadcast(context.Background(), EventDeploymentFailed(resp))
+			m.topic.Broadcast(context.Background(), EventDeploymentJobFailed(resp))
 			return raft.Result{Data: encResult, Value: 0}, nil
 		}, nil
 	}
@@ -427,7 +428,7 @@ func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request Hos
 		}
 
 		return func() (raft.Result, error) {
-			m.topic.Broadcast(context.Background(), resp)
+			m.topic.Broadcast(context.Background(), EventServiceRestartUpdate(resp))
 			return raft.Result{Data: encResult, Value: 0}, nil
 		}, nil
 	}
@@ -446,10 +447,10 @@ func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request Hos
 			return nil, err
 		}
 
-		jobCopy := job
+		jobCopy := *job
 		jobCopy.Id = jobCopy.Request.Service.Id // index not by version, but by ID
 
-		_, err = m.successfulJobUsecase.Post(ctx, &entity.DeploymentJobByService{DeploymentJob: jobCopy}, nil)
+		_, err = m.successfulJobUsecase.Post(ctx, &entity.DeploymentJobByService{DeploymentJob: &jobCopy}, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -469,6 +470,7 @@ func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request Hos
 			// notify the good news
 			m.topic.Broadcast(context.Background(), EventServiceRestarted(resp))
 			m.topic.Broadcast(context.Background(), EventAllServiceRestarted(resp))
+			m.topic.Broadcast(context.Background(), EventDeploymentJobSuccess(resp))
 			return raft.Result{Data: encResult, Value: 0}, nil
 		}, nil
 	}
@@ -493,7 +495,7 @@ func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request Hos
 	}
 
 	return func() (raft.Result, error) {
-		// This server is configured..
+		// This server is configured;
 		m.topic.Broadcast(context.Background(), EventServiceRestarted(resp))
 
 		return raft.Result{Data: encResult}, nil
