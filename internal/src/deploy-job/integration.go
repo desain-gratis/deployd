@@ -52,7 +52,7 @@ type integration struct {
 func New(ctx context.Context, out notifier.Topic, deps *Dependencies, host *entity.Host) *integration {
 	logger := slog.New(NewNotifierLogger(out))
 
-	jobsController := &jobsController{
+	localWorker := &localWorker{
 		dependencies:      deps,
 		host:              host,
 		deploymentJobPool: make(map[string]*deploymentJob), // TODO: use more efficient pool
@@ -61,8 +61,8 @@ func New(ctx context.Context, out notifier.Topic, deps *Dependencies, host *enti
 	}
 
 	i := &integration{
-		Http:  &httpHandler{jobsController: jobsController, dependencies: deps},
-		Event: &eventHandler{jobsController: jobsController, dependencies: deps},
+		Http:  &httpHandler{localWorker: localWorker, dependencies: deps},
+		Event: &eventHandler{localWorker: localWorker, dependencies: deps},
 	}
 
 	return i

@@ -3,6 +3,7 @@ package deployjob
 import (
 	"context"
 	"log/slog"
+	"maps"
 
 	"github.com/desain-gratis/common/lib/notifier"
 )
@@ -33,13 +34,11 @@ func (h *jobLogger) Handle(ctx context.Context, r slog.Record) error {
 		"msg":   r.Message,
 	}
 
-	for k, v := range h.attrs {
-		collect[k] = v
-	}
+	maps.Copy(collect, h.attrs)
 
 	// use map for topic which is parsed here;
 	// we parse here so that we can do early filtering
-	h.topic.Broadcast(ctx, Log{Record: collect})
+	h.topic.Broadcast(ctx, Log(collect))
 
 	return nil
 }
@@ -59,6 +58,4 @@ func (h *jobLogger) WithGroup(name string) slog.Handler {
 
 func (h *jobLogger) Enabled(context.Context, slog.Level) bool { return true }
 
-type Log struct {
-	Record map[string]any
-}
+type Log map[string]any

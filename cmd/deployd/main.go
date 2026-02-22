@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"sync"
 	"time"
 
@@ -261,51 +261,13 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	router.GET("/worker/deployment/tail", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		reqNs := r.Header.Get("X-Namespace")
 		reqId := r.URL.Query().Get("id")
-		handler.TailTransform(filterLog(reqNs, reqId))(w, r, p)
+		handler.TailTransform(filterWorkerLog(reqNs, reqId), jsonToString)(w, r, p)
 	})
 	router.GET("/worker/deployment/tail/ws", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		reqNs := r.Header.Get("X-Namespace")
 		reqId := r.URL.Query().Get("id")
-		handler.Websocket(ctx, wsWhitelist, filterLog(reqNs, reqId))(w, r, p)
+		handler.Websocket(ctx, wsWhitelist, filterWorkerLog(reqNs, reqId), jsonToString)(w, r, p)
 	})
-}
-
-func filterDeploymentJob(reqNs, reqId string) func(any) bool {
-	return func(msg any) bool {
-		var ns, id string
-		switch t := msg.(type) {
-		case deployjob.EventDeploymentJobCreated:
-			ns, id = t.Job.Ns, t.Job.Id
-		case deployjob.EventHostConfigurationUpdate:
-			ns, id = t.Job.Ns, t.Job.Id
-		case deployjob.EventHostConfigured:
-			ns, id = t.Job.Ns, t.Job.Id
-		case deployjob.EventAllHostConfigured:
-			ns, id = t.Job.Ns, t.Job.Id
-		case deployjob.EventRestartConfirmed:
-			ns, id = t.Job.Ns, t.Job.Id
-		case deployjob.EventServiceRestarted:
-			ns, id = t.Job.Ns, t.Job.Id
-		case deployjob.EventServiceRestartUpdate:
-			ns, id = t.Job.Ns, t.Job.Id
-		case deployjob.EventAllServiceRestarted:
-			ns, id = t.Job.Ns, t.Job.Id
-		case deployjob.EventDeploymentJobSuccess:
-			ns, id = t.Job.Ns, t.Job.Id
-		case deployjobintegration.Log:
-			return true
-		}
-
-		if ns == "" || id == "" {
-			return true
-		}
-
-		if reqNs == ns && reqId == id {
-			return false
-		}
-
-		return true
-	}
 }
 
 func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
@@ -346,23 +308,6 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
 	router.POST("/secretd/env", envHandler.Post)
 	router.GET("/secretd/env", envHandler.Get)
 	router.DELETE("/secretd/env", envHandler.Delete)
-}
-
-func getReplicaID() uint64 {
-	replicaID, err := strconv.ParseUint(os.Getenv("DEPLOYD_REPLICA_ID"), 10, 64)
-	if err != nil {
-		log.Fatal().Msgf("invalid DEPLOYD_REPLICA_ID env value: %v", os.Getenv("DEPLOYD_REPLICA_ID"))
-	}
-	return replicaID
-}
-
-func mustEnv(env string) string {
-	value := os.Getenv(env)
-	if value == "" {
-		log.Fatal().Msgf("invalid '%v' env value: %v", env, value)
-	}
-
-	return value
 }
 
 func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
@@ -594,26 +539,53 @@ func withCors(router http.Handler) http.Handler {
 	})
 }
 
-func topicRender(v any) any {
-	switch value := v.(type) {
-	case deployjobintegration.Log:
-		payload, _ := json.Marshal(value.Record)
-		return string(payload)
-	default:
-		result, _ := json.Marshal(v)
-		return string(result)
+func jsonToString(msg any) any {
+	payload, _ := json.Marshal(msg)
+	return string(payload)
+}
+
+func filterDeploymentJob(reqNs, reqId string) func(any) bool {
+	return func(msg any) bool {
+		var ns, id string
+		switch t := msg.(type) {
+		case deployjob.EventDeploymentJobCreated:
+			ns, id = t.Job.Ns, t.Job.Id
+		case deployjob.EventHostConfigurationUpdate:
+			ns, id = t.Job.Ns, t.Job.Id
+		case deployjob.EventHostConfigured:
+			ns, id = t.Job.Ns, t.Job.Id
+		case deployjob.EventAllHostConfigured:
+			ns, id = t.Job.Ns, t.Job.Id
+		case deployjob.EventRestartConfirmed:
+			ns, id = t.Job.Ns, t.Job.Id
+		case deployjob.EventServiceRestarted:
+			ns, id = t.Job.Ns, t.Job.Id
+		case deployjob.EventServiceRestartUpdate:
+			ns, id = t.Job.Ns, t.Job.Id
+		case deployjob.EventAllServiceRestarted:
+			ns, id = t.Job.Ns, t.Job.Id
+		case deployjob.EventDeploymentJobSuccess:
+			ns, id = t.Job.Ns, t.Job.Id
+		case deployjobintegration.Log:
+			return true
+		}
+
+		if ns == "" || id == "" {
+			return true
+		}
+
+		return !(reqNs == ns && reqId == id)
 	}
 }
 
-func filterLog(reqNs, reqId string) func(any) bool {
+func filterWorkerLog(reqNs, reqId string) func(any) bool {
 	return func(msg any) bool {
-		if lg, ok := msg.(deployjobintegration.Log); !ok {
-			if lg.Record["namespace"] == reqNs && lg.Record["job_id"] == reqId {
-				return false
-			}
+		lg, ok := msg.(deployjobintegration.Log)
+		if !ok {
 			return true
 		}
-		return true
+
+		return !(lg["namespace"] == reqNs && fmt.Sprintf("%v", lg["job_id"]) == reqId)
 	}
 }
 
@@ -649,20 +621,12 @@ func transformDeployJobEvent(msg any) any {
 	case deployjob.EventDeploymentJobSuccess:
 		eventName = "deployment-success"
 		job = &value.Job
-	default:
 	}
 
-	return map[string]any{
+	payload, _ := json.Marshal(map[string]any{
 		"table": eventName,
 		"job":   job,
-	}
-}
+	})
 
-func topicRenderWorkerOnly(v any) any {
-	switch value := v.(type) {
-	case deployjobintegration.Log:
-		payload, _ := json.Marshal(value.Record)
-		return string(payload)
-	}
-	return nil
+	return string(payload)
 }

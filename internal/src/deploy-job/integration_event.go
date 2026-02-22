@@ -7,8 +7,8 @@ import (
 )
 
 type eventHandler struct {
-	jobsController *jobsController
-	dependencies   *Dependencies
+	localWorker  *localWorker
+	dependencies *Dependencies
 }
 
 // StartConsumer exposed to main program
@@ -17,16 +17,23 @@ func (w *eventHandler) StartConsumer(topic notifier.Topic, subscription notifier
 		for event := range subscription.Listen() {
 			switch value := event.(type) {
 			case deployjob.EventDeploymentJobCreated:
-				w.jobsController.initializeDeployment(topic, value.Job)
+				w.localWorker.initializeDeployment(topic, value.Job)
+				// TODO:
+				// localManager checkDeployTimeout (eg. check at certaina point, configure finished; and the whole finished)
+				// manager will spawn timeAfter.
+				//
+				// time.AfterFunc(time.Duration(*d.Job.Request.TimeoutSeconds)*time.Second, func(){
+				//	 check if replica leader for "job" entity,
+				//   and do final check to node;
+				// })
 			case deployjob.EventDeploymentJobCancelled:
-				w.jobsController.cancelDeployment(topic, value.Job)
+				w.localWorker.cancelDeployment(topic, value.Job)
 			case deployjob.EventRestartConfirmed:
-				w.jobsController.restartService(topic, value)
+				w.localWorker.restartService(topic, value)
 			case deployjob.EventAllHostConfigured:
-				w.jobsController.confirmDeploymentAsUserIfEnabled(topic, value)
+				w.localWorker.confirmDeploymentAsUserIfEnabled(topic, value)
 			case deployjob.EventServiceRestarted:
-				w.jobsController.continueRestartServiceAsUserIfEnabled(topic, value)
-
+				w.localWorker.continueRestartServiceAsUserIfEnabled(topic, value)
 			default:
 			}
 		}

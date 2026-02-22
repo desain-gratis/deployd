@@ -19,8 +19,8 @@ import (
 // HTTP interface of the deployment job
 // This one is an interface to raft as well to coordinate the job
 type httpHandler struct {
-	jobsController *jobsController
-	dependencies   *Dependencies
+	localWorker  *localWorker
+	dependencies *Dependencies
 }
 
 func (h *httpHandler) SubmitJob(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
@@ -170,7 +170,7 @@ func (h *httpHandler) ConfirmDeployment(w http.ResponseWriter, r *http.Request, 
 func (h *httpHandler) StreamLog(topic notifier.Topic) httprouter.Handle {
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		jobParam := p.ByName("active-job")
-		_, ok := h.jobsController.deploymentJobPool[jobParam]
+		_, ok := h.localWorker.deploymentJobPool[jobParam]
 		if !ok {
 			// todo: 404 not found
 			fmt.Fprintf(w, `{"error": "active job not found"}`)

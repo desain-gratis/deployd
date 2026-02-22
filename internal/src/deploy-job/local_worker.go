@@ -11,7 +11,7 @@ import (
 	"github.com/desain-gratis/deployd/src/entity"
 )
 
-type jobsController struct {
+type localWorker struct {
 	dependencies *Dependencies
 	host         *entity.Host
 
@@ -24,7 +24,7 @@ type jobsController struct {
 	// TODO: use worker pool B-)
 
 	// TODO: later, after have many job types,
-	// consider this jobsController can contain multiple types of job or just single
+	// consider this localWorker can contain multiple types of job or just single
 
 	// other types of job can be put here
 }
@@ -37,7 +37,7 @@ type HostDeploymentJobState struct {
 
 const minimumTimeOutIfConfiguredSeconds = 30
 
-func (w *jobsController) initializeDeployment(out notifier.Topic, jobDefinition entity.DeploymentJob) {
+func (w *localWorker) initializeDeployment(out notifier.Topic, jobDefinition entity.DeploymentJob) {
 	log := w.log
 
 	var proceed bool
@@ -106,7 +106,7 @@ func (w *jobsController) initializeDeployment(out notifier.Topic, jobDefinition 
 	go job.startConfigureHost()
 }
 
-func (w *jobsController) cancelDeployment(_ notifier.Topic, jobDefinition entity.DeploymentJob) {
+func (w *localWorker) cancelDeployment(_ notifier.Topic, jobDefinition entity.DeploymentJob) {
 	job, ok := w.deploymentJobPool[getKey(jobDefinition)]
 	if !ok {
 		return
@@ -115,7 +115,7 @@ func (w *jobsController) cancelDeployment(_ notifier.Topic, jobDefinition entity
 	job.cancel()
 }
 
-func (w *jobsController) confirmDeploymentAsUserIfEnabled(_ notifier.Topic, event deployjob.EventAllHostConfigured) {
+func (w *localWorker) confirmDeploymentAsUserIfEnabled(_ notifier.Topic, event deployjob.EventAllHostConfigured) {
 	if !event.Job.Request.IsBelieve {
 		// let user do the confirmation
 		return
@@ -148,7 +148,7 @@ func (w *jobsController) confirmDeploymentAsUserIfEnabled(_ notifier.Topic, even
 		"host", w.host.Host, "job_status", result.Job.Status, "current_step", result.Step)
 }
 
-func (w *jobsController) continueRestartServiceAsUserIfEnabled(_ notifier.Topic, event deployjob.EventServiceRestarted) {
+func (w *localWorker) continueRestartServiceAsUserIfEnabled(_ notifier.Topic, event deployjob.EventServiceRestarted) {
 	log := w.log
 
 	if event.Job.Status == entity.DeploymentJobStatusDeployed {
@@ -186,7 +186,7 @@ func (w *jobsController) continueRestartServiceAsUserIfEnabled(_ notifier.Topic,
 		"host", w.host.Host, "job_status", result.Job.Status, "current_step", result.Step)
 }
 
-func (w *jobsController) restartService(_ notifier.Topic, event deployjob.EventRestartConfirmed) {
+func (w *localWorker) restartService(_ notifier.Topic, event deployjob.EventRestartConfirmed) {
 	job, ok := w.deploymentJobPool[getKey(event.Job)]
 	if !ok {
 		// should not be possibre, if we already configure, the job should still be there
