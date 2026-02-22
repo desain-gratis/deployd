@@ -59,21 +59,23 @@ func (d *DeploymentJobByService) RefIDs() []string {
 }
 
 type DeploymentJob struct {
-	Ns     string              `json:"namespace"`
-	Status DeploymentJobStatus `json:"status"`
-	Id     string              `json:"id"`
+	Ns string `json:"namespace"`
+	Id string `json:"id"`
 
-	// The request
-	Request SubmitDeploymentJobRequest `json:"request"`
+	// main status / DAG
+	Status            DeploymentJobStatus `json:"status"`
+	RestartServiceJob RestartServiceJob   `json:"restart_service_job"`
+	ConfigureHostJob  ConfigureHostJob    `json:"configure_host_job"`
+
+	// The request; when displaying can be omitted
+	Request *SubmitDeploymentJobRequest `json:"request,omitempty"`
 
 	// The target host in which we will deploy our service to;
 	// In dragonboat lingo, this would be the Nodes, as opossed to NonVotings, Witnesses, Removed member type.
-	Target []Host `json:"target"`
+	// able to be omitted for display
+	Target []Host `json:"target,omitempty"`
 
-	RestartServiceJob RestartServiceJob `json:"restart_service_job"`
-	ConfigureHostJob  ConfigureHostJob  `json:"configure_host_job"`
-
-	RaftConfig RaftConfig `json:"raft_config"`
+	RaftConfig *RaftConfig `json:"raft_config,omitempty"`
 
 	PendingUserAction *PendingUserAction `json:"pending_user_action,omitempty"`
 

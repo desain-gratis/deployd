@@ -157,9 +157,11 @@ func (m *raftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploy
 		PublishedAt: request.PublishedAt,
 	}
 	job.Target = deploymentTarget
-	job.RaftConfig.Replica = raftReplica
-	job.RaftConfig.Service = raftServiceConfig
-	job.Request = request
+	job.RaftConfig = &entity.RaftConfig{
+		Replica: raftReplica,
+		Service: raftServiceConfig,
+	}
+	job.Request = &request
 
 	// for convenience
 	job.Request.TargetHosts = nil

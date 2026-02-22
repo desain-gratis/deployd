@@ -96,7 +96,7 @@ func main() {
 		log.Warn().Msgf("not in deployd environment")
 	}
 
-	err = deployd.InitializeRaft(nil)
+	err = raft_runner.Init()
 	if err != nil {
 		log.Panic().Msgf("failed to init raft: %v", err)
 	}
@@ -261,12 +261,12 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	router.GET("/worker/deployment/tail", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		reqNs := r.Header.Get("X-Namespace")
 		reqId := r.URL.Query().Get("id")
-		handler.TailTransform(filterWorkerLog(reqNs, reqId), jsonToString)(w, r, p)
+		handler.TailTransform(filterWorkerLog(reqNs, reqId), toJson)(w, r, p)
 	})
 	router.GET("/worker/deployment/tail/ws", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		reqNs := r.Header.Get("X-Namespace")
 		reqId := r.URL.Query().Get("id")
-		handler.Websocket(ctx, wsWhitelist, filterWorkerLog(reqNs, reqId), jsonToString)(w, r, p)
+		handler.Websocket(ctx, wsWhitelist, filterWorkerLog(reqNs, reqId), toJson)(w, r, p)
 	})
 }
 
@@ -539,7 +539,7 @@ func withCors(router http.Handler) http.Handler {
 	})
 }
 
-func jsonToString(msg any) any {
+func toJson(msg any) any {
 	payload, _ := json.Marshal(msg)
 	return string(payload)
 }
@@ -574,7 +574,16 @@ func filterDeploymentJob(reqNs, reqId string) func(any) bool {
 			return true
 		}
 
-		return !(reqNs == ns && reqId == id)
+		idMatch := reqId == id
+		if reqId == "" {
+			idMatch = true
+		}
+		nsMatch := reqNs == ns
+		if reqNs == "*" {
+			nsMatch = true
+		}
+
+		return !(nsMatch && idMatch)
 	}
 }
 
@@ -585,7 +594,16 @@ func filterWorkerLog(reqNs, reqId string) func(any) bool {
 			return true
 		}
 
-		return !(lg["namespace"] == reqNs && fmt.Sprintf("%v", lg["job_id"]) == reqId)
+		idMatch := reqId == fmt.Sprintf("%v", lg["job_id"])
+		if reqId == "" {
+			idMatch = true
+		}
+		nsMatch := reqNs == lg["namespace"]
+		if reqNs == "*" {
+			nsMatch = true
+		}
+
+		return !(nsMatch && idMatch)
 	}
 }
 
@@ -622,6 +640,15 @@ func transformDeployJobEvent(msg any) any {
 		eventName = "deployment-success"
 		job = &value.Job
 	}
+
+	if job == nil {
+		return "-"
+	}
+
+	// make it slimmer
+	job.RaftConfig = nil
+	job.Target = nil
+	job.Request = nil
 
 	payload, _ := json.Marshal(map[string]any{
 		"table": eventName,

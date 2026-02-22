@@ -9,7 +9,7 @@ clean:
 	
 build:
 	CGO_ENABLED=0 GOOS=linux go build -o deployd cmd/deployd/*.go
-	docker build . -t deployd
+	docker build --pull=false --network=none -t deployd .
 
 run:
 	docker compose up
@@ -23,10 +23,16 @@ configure:
 	go run ./cmd/test/configure/*.go
 
 submit-job:
-	curl -X POST -H 'X-Namespace: *' 'http://localhost:9401/deployd/job/submit' -d'@submit-sample.json' | jq
+	curl -X POST -H 'X-Namespace: *' 'http://localhost:9401/deployd/submit-job' -d'@submit-sample.json' | jq
+
+submit-job-mb:
+	curl -X POST -H 'X-Namespace: *' 'http://mb1:9600/deployd/submit-job' -d'@submit-sample-mb.json' | jq
 
 get-job:
 	curl -X GET -H 'X-Namespace: *' 'http://localhost:9401/deployd/job' | jq
+
+get-job-mb:
+	curl -X GET -H 'X-Namespace: *' 'http://mb1:9600/deployd/job' | jq
 
 test: configure build-user-profile configure submit-job get-job
 
