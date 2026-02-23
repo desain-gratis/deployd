@@ -47,7 +47,7 @@ func main() {
 		},
 	}}
 
-	u, err := url.Parse("http://localhost:9401/artifactd/build")
+	u, err := url.Parse(host + "/artifactd/build")
 	if err != nil {
 		log.Fatal().Msgf("err: %v", err)
 	}

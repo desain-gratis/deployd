@@ -8,7 +8,7 @@ clean:
 	rm -rf ./tmp*
 	
 build:
-	go test -v ./...
+	go test -v ./internal/... ./src/...
 	CGO_ENABLED=0 GOOS=linux go build -o deployd cmd/deployd/*.go
 	docker build --pull=false --network=none -t deployd .
 
