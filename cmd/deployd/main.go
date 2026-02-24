@@ -170,8 +170,24 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 		log.Fatal().Msgf("failed to run subscribe to a topic:  %v", err)
 	}
 
+	logSubscription, err := jobTopic.Subscribe(ctx, notifier_impl.NewStandardSubscriber(nil))
+	if err != nil {
+		log.Fatal().Msgf("failed to run subscribe to a topic:  %v", err)
+	}
+
 	// IMPORTANT: start often forgotten. Start before replica started to make sure no message is lost
 	subscription.Start()
+	logSubscription.Start()
+
+	go func() {
+		for msg := range logSubscription.Listen() {
+			msga, ok := msg.(deployjobintegration.Log)
+			if !ok {
+				continue
+			}
+			log.Info().Msgf("%v", msga)
+		}
+	}()
 
 	ctx, err = raft_runner.RunReplica[any](
 		ctx,
@@ -569,16 +585,12 @@ func filterDeploymentJob(reqNs, reqService, reqId string) func(any) bool {
 			return true
 		}
 
-		if ns == "" || id == "" {
-			return true
-		}
-
 		idMatch := reqId == id
 		if reqId == "" {
 			idMatch = true
 		}
 		nsMatch := reqNs == ns
-		if reqNs == "*" {
+		if reqNs == "*" || reqNs == "" {
 			nsMatch = true
 		}
 		srvMatch := reqService == srv
@@ -602,7 +614,7 @@ func filterWorkerLog(reqNs, reqSrv, reqId string) func(any) bool {
 			idMatch = true
 		}
 		nsMatch := reqNs == lg["namespace"]
-		if reqNs == "*" {
+		if reqNs == "*" || reqNs == "" {
 			nsMatch = true
 		}
 
@@ -620,32 +632,35 @@ func transformDeployJobEvent(msg any) any {
 	var job *entity.DeploymentJob
 
 	switch value := msg.(type) {
+	case deployjob.EventDeploymentJobFailed:
+		eventName = "deployment-job-update"
+		job = &value.Job
 	case deployjob.EventDeploymentJobCreated:
-		eventName = "deployment-created"
+		eventName = "deployment-job-update"
 		job = &value.Job
 	case deployjob.EventHostConfigurationUpdate:
-		eventName = "host-configuration-update"
+		eventName = "deployment-job-update"
 		job = &value.Job
 	case deployjob.EventHostConfigured:
-		eventName = "host-configured"
+		eventName = "deployment-job-update"
 		job = &value.Job
 	case deployjob.EventRestartConfirmed:
-		eventName = "service-restart-confirmed"
+		eventName = "deployment-job-update"
 		job = &value.Job
 	case deployjob.EventServiceRestarted:
-		eventName = "service-restarted"
+		eventName = "deployment-job-update"
 		job = &value.Job
 	case deployjob.EventServiceRestartUpdate:
-		eventName = "service-restart-update"
+		eventName = "deployment-job-update"
 		job = &value.Job
 	case deployjob.EventAllHostConfigured:
-		eventName = "all-host-configured"
+		eventName = "deployment-job-update"
 		job = &value.Job
 	case deployjob.EventAllServiceRestarted:
-		eventName = "all-service-restarted"
+		eventName = "deployment-job-update"
 		job = &value.Job
 	case deployjob.EventDeploymentJobSuccess:
-		eventName = "deployment-success"
+		eventName = "deployment-job-update"
 		job = &value.Job
 	}
 

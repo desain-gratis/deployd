@@ -413,6 +413,7 @@ func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request Hos
 
 		resp := HostRestartServiceUpdateResponse{
 			CommonResponse: CommonResponse{
+				Job:        *job,
 				Failed:     true,
 				FailReason: request.ErrorMessage,
 			},
