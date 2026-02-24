@@ -20,7 +20,7 @@ build-user-profile:
 	CGO_ENABLED=0 GOOS=linux go build -o ./archive/user-profile cmd/test/user-profile/*.go
 	tar -czvf user-profile.tar.gz archive
 
-configure:
+configure: build-user-profile
 	go run ./cmd/test/configure/*.go
 
 submit-job:

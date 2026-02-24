@@ -581,6 +581,8 @@ func filterDeploymentJob(reqNs, reqService, reqId string) func(any) bool {
 			ns, srv, id = t.Job.Ns, t.Job.Request.Service.Id, t.Job.Id
 		case deployjob.EventDeploymentJobSuccess:
 			ns, srv, id = t.Job.Ns, t.Job.Request.Service.Id, t.Job.Id
+		case deployjob.EventDeploymentJobFailed:
+			ns, srv, id = t.Job.Ns, t.Job.Request.Service.Id, t.Job.Id
 		case deployjobintegration.Log:
 			return true
 		}
