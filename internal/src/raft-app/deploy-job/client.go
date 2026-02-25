@@ -12,8 +12,8 @@ var (
 )
 
 type SubmitJobResponse struct {
-	SubmitJobStatus SubmitJobStatus `json:"submit_job_status,omitempty"` // Ephemeral field, only populated after job reply
-	Job             entity.DeploymentJob
+	SubmitJobStatus SubmitJobStatus      `json:"submit_job_status,omitempty"` // Ephemeral field, only populated after job reply
+	Job             entity.DeploymentJob `json:"job"`
 }
 
 type SubmitJobStatus string

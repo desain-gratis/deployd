@@ -75,7 +75,7 @@ func (d *deploymentJob) startConfigureHost() {
 		log:           log,
 	}
 
-	log.Info("configuring service")
+	log.Info("configuring host")
 
 	terminalStatus := entity.HostConfigurationStatusSuccess
 
@@ -88,6 +88,9 @@ func (d *deploymentJob) startConfigureHost() {
 		}
 		errStr := err.Error()
 		errMsg = &errStr
+		log.Error("failed to configure host: " + errStr)
+	} else {
+		log.Info("successfully configure host")
 	}
 
 	d.State.ConfigurationStatus = terminalStatus
@@ -110,8 +113,6 @@ func (d *deploymentJob) startConfigureHost() {
 		log.Warn("failed to notify configure success to manager. manager should check this host.", "error", err) // TODO: implement
 		return
 	}
-
-	log.Info("successfully configured host")
 }
 
 func (d *deploymentJob) startRestartHostService() {
@@ -157,6 +158,9 @@ func (d *deploymentJob) startRestartHostService() {
 		}
 		errStr := err.Error()
 		errMsg = &errStr
+		log.Error("failed to restart service: " + errStr)
+	} else {
+		log.Info("successfully restarting service")
 	}
 
 	d.State.RestartServiceStatus = terminalStatus
@@ -178,6 +182,4 @@ func (d *deploymentJob) startRestartHostService() {
 		log.Warn("failed to notify deployment status to manager. manager should check this host.", "error", err) // TODO: implement
 		return
 	}
-
-	log.Info("successfully restarting service")
 }

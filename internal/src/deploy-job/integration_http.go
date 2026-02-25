@@ -120,7 +120,11 @@ func (h *httpHandler) SubmitJob(w http.ResponseWriter, r *http.Request, p httpro
 		// TODO: need retry!!!
 	}
 
-	fmt.Fprintf(w, `{"success": "job submitted with id: %v (%v)"}`, result.Job.Id, result.SubmitJobStatus)
+	resp, _ := json.Marshal(map[string]any{
+		"success": result,
+	})
+
+	fmt.Fprintln(w, string(resp))
 }
 
 func (h *httpHandler) CancelJob(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
