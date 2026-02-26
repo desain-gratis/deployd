@@ -13,7 +13,7 @@ func main() {
 	router := httprouter.New()
 
 	router.GET("/", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		fmt.Fprint(w, "インドネシア🇮🇩で何かが湧き上げている\n")
+		fmt.Fprint(w, "It's friday\n")
 		key := "MESSAGE"
 		fmt.Fprintf(w, "Env read: %v = %v.\n", key, os.Getenv(key))
 	})
