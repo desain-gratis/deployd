@@ -19,9 +19,10 @@ import (
 	mycontent_base "github.com/desain-gratis/common/delivery/mycontent-api/mycontent/base"
 	blob_s3 "github.com/desain-gratis/common/delivery/mycontent-api/storage/blob/s3"
 	content_chraft "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/clickhouse-raft"
+	"github.com/desain-gratis/common/lib/notifier"
 	notifier_api "github.com/desain-gratis/common/lib/notifier/api"
 	notifier_impl "github.com/desain-gratis/common/lib/notifier/impl"
-	raft_runner "github.com/desain-gratis/common/lib/raft/runner"
+	raftr "github.com/desain-gratis/common/lib/raft/runner"
 
 	deployjobintegration "github.com/desain-gratis/deployd/internal/src/deploy-job"
 	deployjob "github.com/desain-gratis/deployd/internal/src/raft-app/deploy-job"
@@ -63,6 +64,8 @@ var (
 
 	// deploy job client
 	raftDeployjobUsecase *deployjob.Client
+
+	deploydTopic notifier.Topic
 )
 
 func main() {
@@ -95,7 +98,10 @@ func main() {
 		log.Warn().Msgf("not in deployd environment")
 	}
 
-	err = raft_runner.Init()
+	// All event regarding job lifecycle will be published to this topic
+	deploydTopic = notifier_impl.NewStandardTopic()
+
+	err = raftr.Init()
 	if err != nil {
 		log.Panic().Msgf("failed to init raft: %v", err)
 	}
@@ -162,15 +168,12 @@ func enableSystemdModule(ctx context.Context, router *httprouter.Router) {
 }
 
 func enableJobModule(ctx context.Context, router *httprouter.Router) {
-	// All event regarding job lifecycle will be published to this topic
-	jobTopic := notifier_impl.NewStandardTopic()
-
-	subscription, err := jobTopic.Subscribe(ctx, notifier_impl.NewStandardSubscriber(nil))
+	subscription, err := deploydTopic.Subscribe(ctx, notifier_impl.NewStandardSubscriber(nil))
 	if err != nil {
 		log.Fatal().Msgf("failed to run subscribe to a topic:  %v", err)
 	}
 
-	logSubscription, err := jobTopic.Subscribe(ctx, notifier_impl.NewStandardSubscriber(nil))
+	logSubscription, err := deploydTopic.Subscribe(ctx, notifier_impl.NewStandardSubscriber(nil))
 	if err != nil {
 		log.Fatal().Msgf("failed to run subscribe to a topic:  %v", err)
 	}
@@ -189,10 +192,10 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 		}
 	}()
 
-	ctx, err = raft_runner.RunReplica[any](
+	ctx, err = raftr.RunReplica[any](
 		ctx,
 		"deploy-job-v1",
-		deployjob.New(jobTopic),
+		deployjob.New(deploydTopic),
 	)
 	if err != nil {
 		log.Fatal().Msgf("failed to run deploy-job-v1 raft: %v", err)
@@ -216,17 +219,16 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 		[]string{"service"},
 	)
 
-	// more advanced
-	rClient, err := raft_runner.NewClient(ctx)
+	// client for "worker" / "local integration" to communicate with Raft app
+	rClient, err := raftr.NewClient(ctx)
 	if err != nil {
 		log.Fatal().Msgf("err: %v", err)
 	}
-
 	raftDeployjobUsecase = deployjob.NewClient(rClient)
 
 	integration := deployjobintegration.New(
 		ctx,
-		jobTopic,
+		deploydTopic,
 		&deployjobintegration.Dependencies{
 			HostConfigUsecase:        hostConfigUsecase,
 			ServiceDefinitionUsecase: serviceDefinitionUsecase,
@@ -248,9 +250,9 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	router.GET("/deployd/job", jobHandler.Get)
 	router.GET("/deployd/successful-job", lastSuccessfulJobHandler.Get)
 
-	integration.Event.StartConsumer(jobTopic, subscription)
+	integration.Event.StartConsumer(ctx, deploydTopic, subscription)
 
-	handler := notifier_api.NewTopicAPI(jobTopic)
+	handler := notifier_api.NewTopicAPI(deploydTopic)
 	// websocket version
 	wsWhitelist := []string{
 		"http://localhost:*", "http://localhost",
@@ -291,7 +293,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 }
 
 func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
-	ctx, err := raft_runner.RunReplica[any](
+	ctx, err := raftr.RunReplica[any](
 		ctx,
 		"secretd-v1",
 		content_chraft.New(
@@ -331,7 +333,7 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
 }
 
 func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
-	ctx, err := raft_runner.RunReplica[any](
+	ctx, err := raftr.RunReplica[any](
 		ctx,
 		"deployd-v1",
 		content_chraft.New(nil,
@@ -415,7 +417,7 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 func enableArtifactdModule(ctx context.Context, router *httprouter.Router) {
 	// TODO: separate between config / CRUD with the incrementalID so we can reset the DB more easily
 	// TODO: we can use commit ID purely on the archive, need to modify the gh-action to use bare archive client (instead of Builder)
-	ctx, err := raft_runner.RunReplica[any](
+	ctx, err := raftr.RunReplica[any](
 		ctx,
 		"artifactd-v1",
 		content_chraft.New(

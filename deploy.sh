@@ -1,4 +1,4 @@
-make build 
+# make build 
 
 (ssh root@mb2 "sudo systemctl stop deployd" && scp deployd root@mb2:/opt/deployd/releases/0  && ssh root@mb2 "sudo systemctl restart deployd") &
 

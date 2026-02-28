@@ -9,6 +9,7 @@ import (
 	"github.com/desain-gratis/common/lib/notifier"
 	deployjob "github.com/desain-gratis/deployd/internal/src/raft-app/deploy-job"
 	"github.com/desain-gratis/deployd/src/entity"
+	"github.com/rs/zerolog/log"
 )
 
 type localWorker struct {
@@ -36,6 +37,13 @@ type HostDeploymentJobState struct {
 }
 
 const minimumTimeOutIfConfiguredSeconds = 30
+
+func (w *localWorker) doSomethingAsLeader(ctx context.Context) {
+	// w.log
+	log.Info().Msgf("IM ZA LEADER, IM ZA LEADER; I DO LEADER CODE!!!!")
+	<-ctx.Done()
+	log.Info().Msgf("IM NOT ZA LEADER NOMORE!!!")
+}
 
 func (w *localWorker) initializeDeployment(out notifier.Topic, jobDefinition entity.DeploymentJob) {
 	log := w.log

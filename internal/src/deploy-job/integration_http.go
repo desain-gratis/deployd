@@ -73,7 +73,7 @@ func (h *httpHandler) SubmitJob(w http.ResponseWriter, r *http.Request, p httpro
 		latestJob := jobs[0]
 
 		// if too soon, possible duplicate!
-		if time.Since(latestJob.PublishedAt) < time.Duration(10*time.Second) {
+		if time.Since(latestJob.PublishedAt) < time.Duration(5*time.Second) {
 			fmt.Fprintf(w, `{"error": "too fast, please wait"}`) // TODO: more appropriate
 			return
 		}
