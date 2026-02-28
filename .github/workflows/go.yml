@@ -71,11 +71,6 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:desain-gratis-ci
 
-      - name: Debug Tailscale
-        run: |
-          tailscale status
-          tailscale ping mb1
-
       - name: Upload artifactd & metadata to private deployd repository
         uses: desain-gratis/deployd-gh-action@v1
         with:
