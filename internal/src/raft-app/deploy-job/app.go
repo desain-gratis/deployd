@@ -53,7 +53,7 @@ type raftApp struct {
 func New(topic notifier.Topic) *raftApp {
 	stateStore := content_chraft.New(
 		topic,
-		content_chraft.TableConfig{Name: TableDeploymentJob, RefSize: 1, IncrementalID: true, IncrementalIDGetLimit: 10},
+		content_chraft.TableConfig{Name: TableDeploymentJob, RefSize: 1, Versioned: true, VersionedGetLimit: 10},
 		content_chraft.TableConfig{Name: TableDeploymentSuccess, RefSize: 0},
 	)
 

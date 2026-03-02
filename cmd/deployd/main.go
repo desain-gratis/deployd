@@ -298,8 +298,8 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
 		"secretd-v1",
 		content_chraft.New(
 			nil,
-			content_chraft.TableConfig{Name: "secretd_secret", RefSize: 1, IncrementalID: true, IncrementalIDGetLimit: 5},
-			content_chraft.TableConfig{Name: "secretd_env", RefSize: 1, IncrementalID: true, IncrementalIDGetLimit: 5},
+			content_chraft.TableConfig{Name: "secretd_secret", RefSize: 1, Versioned: true, VersionedGetLimit: 5},
+			content_chraft.TableConfig{Name: "secretd_env", RefSize: 1, Versioned: true, VersionedGetLimit: 5},
 		),
 	)
 	if err != nil {
@@ -423,7 +423,7 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router) {
 		content_chraft.New(
 			nil,
 			content_chraft.TableConfig{Name: "artifactd_repository", RefSize: 0},
-			content_chraft.TableConfig{Name: "artifactd_build", RefSize: 1, IncrementalID: true},
+			content_chraft.TableConfig{Name: "artifactd_build", RefSize: 1, Versioned: true},
 			content_chraft.TableConfig{Name: "artifactd_archive", RefSize: 2},
 		),
 	)
