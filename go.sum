@@ -66,8 +66,8 @@ github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ3
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/desain-gratis/common v0.0.2-0.20260302234941-75bac27d6a2d h1:FxTeZE7uY1dAzLE0ues3hXraexrATP1hwFmLn3lZXBs=
-github.com/desain-gratis/common v0.0.2-0.20260302234941-75bac27d6a2d/go.mod h1:KcV1lcA6mvEuFw0WJLGGo4A2Da2iINm6k8FaCgzxyRY=
+github.com/desain-gratis/common v0.0.2-0.20260228150818-ef2e9e18fcb9 h1:7yvevWDWFLSJ4gaCbkYdLoOImtygsN0djb6VN2TGwCM=
+github.com/desain-gratis/common v0.0.2-0.20260228150818-ef2e9e18fcb9/go.mod h1:2P942PgRdtDpgzammXCWxWBV/CMd7P+zU6DgMyLZYGk=
 github.com/dgraph-io/badger v1.6.0/go.mod h1:zwt7syl517jmP8s94KqSxTlM6IMsdhYy6psNgSztDR4=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZmtrrCbhqsmaPHjLKYnJCaQ=
 github.com/dgryski/go-farm v0.0.0-20190423205320-6a90982ecee2/go.mod h1:SqUrOPUnsFjfmXRMNPybcSiG0BgUW2AuFH8PAnS2iTw=

@@ -11,9 +11,8 @@ require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.42.0
 	github.com/coder/websocket v1.8.14
 	github.com/coreos/go-systemd/v22 v22.6.0
-	github.com/desain-gratis/common v0.0.2-0.20260302234941-75bac27d6a2d
+	github.com/desain-gratis/common v0.0.2-0.20260228150818-ef2e9e18fcb9
 	github.com/julienschmidt/httprouter v1.3.0
-	github.com/lni/dragonboat/v4 v4.0.0-20250723143628-076c7f6497dc
 	github.com/rs/zerolog v1.34.0
 	github.com/spf13/viper v1.21.0
 )
@@ -55,6 +54,7 @@ require (
 	github.com/klauspost/crc32 v1.3.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
+	github.com/lni/dragonboat/v4 v4.0.0-20250723143628-076c7f6497dc // indirect
 	github.com/lni/goutils v1.4.0 // indirect
 	github.com/lni/vfs v0.2.1-0.20220616104132-8852fd867376 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
