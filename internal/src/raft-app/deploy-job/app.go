@@ -283,6 +283,8 @@ func (m *raftApp) applyHostConfigurationUpdate(ctx context.Context, request Conf
 		job.Status = entity.DeploymentJobStatusFailed
 		msg := "a host failed configuration"
 		failReason = &msg
+	} else {
+		job.Status = entity.DeploymentJobStatusConfiguring
 	}
 
 	job, err = m.jobUsecase.Post(ctx, job, nil)
