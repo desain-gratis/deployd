@@ -277,9 +277,7 @@ func (m *raftApp) applyHostConfigurationUpdate(ctx context.Context, request Conf
 				CTAButtonLabel: "CONTINUE",
 			}
 		}
-	}
-
-	if markFailed {
+	} else if markFailed {
 		job.Status = entity.DeploymentJobStatusFailed
 		msg := "a host failed configuration"
 		failReason = &msg
