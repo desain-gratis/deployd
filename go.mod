@@ -12,6 +12,7 @@ require (
 	github.com/coder/websocket v1.8.14
 	github.com/coreos/go-systemd/v22 v22.6.0
 	github.com/desain-gratis/common v0.0.2-0.20260304221550-6430eaaf00cc
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/rs/zerolog v1.34.0
 	github.com/spf13/viper v1.21.0
@@ -47,7 +48,7 @@ require (
 	github.com/hashicorp/go-msgpack v0.5.3 // indirect
 	github.com/hashicorp/go-multierror v1.0.0 // indirect
 	github.com/hashicorp/go-sockaddr v1.0.0 // indirect
-	github.com/hashicorp/golang-lru v0.5.1 // indirect
+	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/hashicorp/memberlist v0.3.1 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.11 // indirect

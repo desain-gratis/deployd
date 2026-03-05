@@ -36,6 +36,11 @@ func (h *jobLogger) Handle(ctx context.Context, r slog.Record) error {
 
 	maps.Copy(collect, h.attrs)
 
+	r.Attrs(func(a slog.Attr) bool {
+		collect[a.Key] = a.Value.Any()
+		return true
+	})
+
 	// use map for topic which is parsed here;
 	// we parse here so that we can do early filtering
 	h.topic.Broadcast(ctx, Log(collect))

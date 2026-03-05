@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/desain-gratis/common/delivery/mycontent-api/mycontent"
 	mycontent_base "github.com/desain-gratis/common/delivery/mycontent-api/mycontent/base"
 	content_chraft "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/clickhouse-raft"
 	"github.com/desain-gratis/common/lib/notifier"
 	"github.com/desain-gratis/common/lib/raft"
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/rs/zerolog/log"
 
 	"github.com/desain-gratis/deployd/src/entity"
@@ -46,6 +48,8 @@ type raftApp struct {
 
 	topic notifier.Topic
 
+	jobCache *expirable.LRU[jobKey, *entity.DeploymentJob]
+
 	jobUsecase           *mycontent_base.Handler[*entity.DeploymentJob]
 	successfulJobUsecase *mycontent_base.Handler[*entity.DeploymentJobByService]
 }
@@ -71,12 +75,22 @@ func New(topic notifier.Topic) *raftApp {
 	jobUsecase := mycontent_base.New[*entity.DeploymentJob](jobStorage, 1)
 	successfulJobUsecase := mycontent_base.New[*entity.DeploymentJobByService](serviceInstanceStorage, 0)
 
+	// cache is important because we don't rely on DB for get-and-set operation (expect stale data, trade off with high write)
+	jobCache := expirable.NewLRU[jobKey, *entity.DeploymentJob](256, nil, 20*time.Minute) // at least until the DB can catch up
+
 	return &raftApp{
 		topic:                topic,
 		ContentApp:           stateStore,
 		jobUsecase:           jobUsecase,
 		successfulJobUsecase: successfulJobUsecase,
+		jobCache:             jobCache,
 	}
+}
+
+type jobKey struct {
+	namespace string
+	service   string
+	id        string
 }
 
 // make it easier for everyone..
@@ -176,6 +190,9 @@ func (m *raftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploy
 		return nil, err
 	}
 
+	kc := jobKey{namespace: job.Ns, service: job.Request.Service.Id, id: job.Id}
+	_ = m.jobCache.Add(kc, &job)
+
 	resp := SubmitJobResponse{
 		SubmitJobStatus: SubmitJobStatusSuccess,
 		Job:             *result,
@@ -197,12 +214,10 @@ func (m *raftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploy
 }
 
 func (m *raftApp) cancelJob(ctx context.Context, request CancelJobRequest) (raft.OnAfterApply, error) {
-	previousJobs, err := m.jobUsecase.Get(ctx, request.Ns, []string{request.Service}, request.JobId)
+	previousJob, err := m.getJobByID(ctx, request.Ns, request.Service, request.JobId)
 	if err != nil {
 		return nil, err
 	}
-
-	previousJob := previousJobs[0]
 
 	switch previousJob.Status {
 	case entity.DeploymentJobStatusCancelled:
@@ -232,15 +247,10 @@ func (m *raftApp) cancelJob(ctx context.Context, request CancelJobRequest) (raft
 
 // Host configuration update
 func (m *raftApp) applyHostConfigurationUpdate(ctx context.Context, request ConfigurationUpdateRequest) (raft.OnAfterApply, error) {
-	jobs, err := m.jobUsecase.Get(ctx, request.Ns, []string{request.Service}, request.JobId)
+	job, err := m.getJobByID(ctx, request.Ns, request.Service, request.JobId)
 	if err != nil {
 		return nil, err
 	}
-	if len(jobs) != 1 {
-		return nil, errors.New("job nengendi???? not found")
-	}
-
-	job := jobs[0]
 
 	if job.ConfigureHostJob.Status == nil {
 		return nil, errors.New("invalid job")
@@ -325,15 +335,10 @@ func (m *raftApp) applyHostConfigurationUpdate(ctx context.Context, request Conf
 }
 
 func (m *raftApp) restartHostService(ctx context.Context, request RestartConfirmation) (raft.OnAfterApply, error) {
-	jobs, err := m.jobUsecase.Get(ctx, request.Ns, []string{request.Service}, request.JobId)
+	job, err := m.getJobByID(ctx, request.Ns, request.Service, request.JobId)
 	if err != nil {
 		return nil, err
 	}
-	if len(jobs) != 1 {
-		return nil, errors.New("job nengendi???? not found")
-	}
-
-	job := jobs[0]
 
 	// only restart if job status is already CONFIGURED or DEPLOYING
 	if job.Status != entity.DeploymentJobStatusConfigured && job.Status != entity.DeploymentJobStatusDeploying {
@@ -378,15 +383,10 @@ func (m *raftApp) restartHostService(ctx context.Context, request RestartConfirm
 }
 
 func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request HostRestartServiceUpdateRequest) (raft.OnAfterApply, error) {
-	jobs, err := m.jobUsecase.Get(ctx, request.Ns, []string{request.Service}, request.JobId)
+	job, err := m.getJobByID(ctx, request.Ns, request.Service, request.JobId)
 	if err != nil {
 		return nil, err
 	}
-	if len(jobs) != 1 {
-		return nil, errors.New("job nengendi???? not found")
-	}
-
-	job := jobs[0]
 
 	if job.Status != entity.DeploymentJobStatusDeploying {
 		return nil, errors.New("invalid state")
@@ -652,4 +652,24 @@ func initDeploymentJobState(job *entity.DeploymentJob) {
 			Status: entity.HostConfigurationStatusPending,
 		}
 	}
+}
+
+// todo: refac fac
+func (m *raftApp) getJobByID(ctx context.Context, namespace, service, id string) (*entity.DeploymentJob, error) {
+	// check cache
+	kc := jobKey{namespace: namespace, service: service, id: id}
+	job, ok := m.jobCache.Get(kc)
+	if ok {
+		return job, nil
+	}
+
+	previousJobs, err := m.jobUsecase.Get(ctx, namespace, []string{service}, id)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = m.jobCache.Add(kc, previousJobs[0])
+
+	// if not found it will be err also, so this is safe
+	return previousJobs[0], nil
 }

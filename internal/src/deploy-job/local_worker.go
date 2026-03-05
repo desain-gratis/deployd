@@ -19,6 +19,13 @@ type localWorker struct {
 	// todo: can add lock
 	deploymentJobPool map[string]*deploymentJob
 
+	// todo: use input channel to queue job based on namespace & service
+	// map[{ns, service}]chan <- msg
+
+	// Also, retry mechanism / timeout handling, and resilliency should be coded
+	// eg. after job is QUEUED, if local worker already setting up in memory & ready, local worker need to update to the raft back (we already implement)
+	// what we havent is, if the local worker does not report back for various reason (only if they're expected to reply back)
+
 	// controller level log
 	log *slog.Logger
 
@@ -204,6 +211,7 @@ func (w *localWorker) restartService(_ notifier.Topic, event deployjob.EventRest
 	job, ok := w.deploymentJobPool[getKey(event.Job)]
 	if !ok {
 		// should not be possibre, if we already configure, the job should still be there
+		log.Warn("job pool should be there for restart")
 		return
 	}
 
