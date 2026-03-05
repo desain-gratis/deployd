@@ -128,7 +128,7 @@ func (d *deploymentJob) startRestartHostService() {
 		log:           log,
 	}
 
-	log.Info("received request to restart service")
+	log.Info("received request to restart service and it's our turn")
 
 	// modify local state
 	d.State.RestartServiceStatus = entity.HostRestartServiceStatusRestarting

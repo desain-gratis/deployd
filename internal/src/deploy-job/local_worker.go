@@ -120,10 +120,14 @@ func (w *localWorker) cancelDeployment(_ notifier.Topic, jobDefinition entity.De
 		return
 	}
 
+	// TODO: implement
+
 	job.cancel()
 }
 
 func (w *localWorker) confirmDeploymentAsUserIfEnabled(_ notifier.Topic, event deployjob.EventAllHostConfigured) {
+	log := w.log
+
 	if !event.Job.Request.IsBelieve {
 		// let user do the confirmation
 		return
@@ -133,10 +137,9 @@ func (w *localWorker) confirmDeploymentAsUserIfEnabled(_ notifier.Topic, event d
 
 	// only one node is enough for executing this
 	if event.TriggerHost != w.host.Host {
+		log.Info("confirming job deployment on behalf of user (believe)", "host", w.host.Host)
 		return
 	}
-
-	log := w.log
 
 	log.Info("confirming job deployment on behalf of user (believe)", "host", w.host.Host)
 	result, err := w.dependencies.RaftJobUsecase.ConfirmRestartService(context.Background(), deployjob.RestartConfirmation{
@@ -166,6 +169,7 @@ func (w *localWorker) continueRestartServiceAsUserIfEnabled(_ notifier.Topic, ev
 
 	if !event.Job.Request.IsBelieve {
 		// let user do the confirmation
+		log.Info("received request to restart service as user. ignoring because the job need manual user confirmation")
 		return
 	}
 
@@ -173,6 +177,7 @@ func (w *localWorker) continueRestartServiceAsUserIfEnabled(_ notifier.Topic, ev
 
 	// only one node is enough for executing this
 	if event.TriggerHost != w.host.Host {
+		log.Info("received request to restart service as user. ignoring because of we're not the assigned executor.")
 		return
 	}
 
@@ -195,6 +200,7 @@ func (w *localWorker) continueRestartServiceAsUserIfEnabled(_ notifier.Topic, ev
 }
 
 func (w *localWorker) restartService(_ notifier.Topic, event deployjob.EventRestartConfirmed) {
+	log := w.log
 	job, ok := w.deploymentJobPool[getKey(event.Job)]
 	if !ok {
 		// should not be possibre, if we already configure, the job should still be there
@@ -203,6 +209,7 @@ func (w *localWorker) restartService(_ notifier.Topic, event deployjob.EventRest
 
 	// restart is one by one and targeted
 	if event.TargetHost != w.host.Host {
+		log.Info("received request to restart service, but it's not our turn yet, so it is ignored")
 		return
 	}
 
@@ -211,5 +218,5 @@ func (w *localWorker) restartService(_ notifier.Topic, event deployjob.EventRest
 
 func getKey(job entity.DeploymentJob) string {
 	keys := []string{job.Ns, job.Request.Service.Id, job.Id}
-	return strings.Join(keys, "\\")
+	return strings.Join(keys, "|")
 }

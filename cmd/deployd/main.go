@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -183,12 +184,26 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	logSubscription.Start()
 
 	go func() {
+		buf := bytes.NewBuffer(make([]byte, 0, 1000))
 		for msg := range logSubscription.Listen() {
 			msga, ok := msg.(deployjobintegration.Log)
 			if !ok {
 				continue
 			}
-			log.Info().Msgf("%v", msga)
+			level := "INFO"
+			for k, v := range msga {
+				if k == "level" {
+					level, _ = v.(string)
+					continue
+				}
+				fmt.Fprintf(buf, "%v=%v ", k, v)
+			}
+			if level == "INFO" {
+				log.Info().Msg(buf.String())
+			} else {
+				log.Error().Msg(buf.String())
+			}
+			buf.Reset()
 		}
 	}()
 
