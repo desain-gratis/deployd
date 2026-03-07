@@ -20,15 +20,6 @@ func main() {
 		fmt.Fprintf(w, "Env read: %v = %v.\n", key, os.Getenv(key))
 	})
 
-	router.GET("", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		fmt.Fprint(w, "In place edit in github 🌴✅🌞\n")
-		key := "MESSAGE"
-		log.Printf("LOH PAK BUU, '%v'\n", r.Pattern)
-		log.Printf("LOH PAK BUU, '%v'\n", r.RequestURI)
-
-		fmt.Fprintf(w, "Env read: %v = %v.\n", key, os.Getenv(key))
-	})
-
 	router.GET("/test", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		fmt.Fprint(w, "In place edit in github 🌴✅🌞\n")
 		key := "MESSAGE"
