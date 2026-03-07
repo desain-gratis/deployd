@@ -18,6 +18,16 @@ func main() {
 		fmt.Fprintf(w, "Env read: %v = %v.\n", key, os.Getenv(key))
 	})
 
+	router.GET("/test", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		fmt.Fprint(w, "In place edit in github 🌴✅🌞\n")
+		key := "MESSAGE"
+		fmt.Fprintf(w, "Env read: %v = %v.\n", key, os.Getenv(key))
+	})
+
+	router.NotFound = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "UHUUUH 404")
+	})
+
 	server := &http.Server{
 		Addr:    "0.0.0.0:10001",
 		Handler: router,
