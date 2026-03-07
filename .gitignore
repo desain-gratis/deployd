@@ -3,3 +3,6 @@
 /tmp
 /tmp*
 .env
+/user-profile
+/user-profile.tar.gz
+/deploy
