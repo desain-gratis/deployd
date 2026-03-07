@@ -22,8 +22,8 @@ After=network.target
 [Service]
 Type=simple
 EnvironmentFile=-/etc/%s/env/overwrite.env
-Environment=DEPLOYD_SECRET=/etc/%s/secret/secret.yaml
-Environment=DEPLOYD_RAFT=/etc/%s/raft/dragonboat.yaml
+Environment=DEPLOYD_SECRET=-/etc/%s/secret/secret.yaml
+Environment=DEPLOYD_RAFT=-/etc/%s/raft/dragonboat.yaml
 Environment=DEPLOYD_SERVICE_NAMESPACE=%v
 Environment=DEPLOYD_SERVICE=%s
 ExecStart=/opt/%s/current/%s
