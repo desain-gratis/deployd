@@ -107,7 +107,15 @@ func (a *configureHost) Execute() error {
 	serviceName := fmt.Sprintf("%s_%s.service", a.Job.Request.Ns, a.Job.Request.Service.Id)
 
 	err = func() error {
-		content := BuildUnit(a.Job.Request.Ns, a.Job.Request.Service.Id, a.Job.Request.Service.Description, a.Job.Request.Service.ExecutablePath)
+		content := BuildUnit(
+			a.Job.Request.Ns,
+			a.Job.Request.Service.Id,
+			a.Job.Request.Service.Description,
+			a.Job.Request.Service.ExecutablePath,
+			envPath,
+			secretPath,
+			raftPath,
+		)
 		name := serviceName
 		tmp := filepath.Join(systemdPath, name+".tmp")
 		final := filepath.Join(systemdPath, name)

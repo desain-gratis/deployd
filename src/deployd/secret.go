@@ -10,6 +10,7 @@ import (
 
 const (
 	envSecretConfigPath = "DEPLOYD_SECRET"
+	envRaftConfigPath   = "DEPLOYD_RAFT"
 )
 
 var (

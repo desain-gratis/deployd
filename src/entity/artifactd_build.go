@@ -10,6 +10,7 @@ import (
 
 var _ mycontent.VersionedData = &BuildArtifact{}
 
+// TODO: we can make another entity that extend this, to get "BuildArtifactByBranch" ; todo: in dg
 type BuildArtifact struct {
 	Ns           string          `json:"namespace" ch:"namespace"`
 	Id           string          `json:"id"`
