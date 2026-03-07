@@ -126,6 +126,17 @@ func (a *configureHost) Execute() error {
 		return err
 	}
 
+	// configure clouudflared if enabled;
+	// if not, ignore (either already exist or not)
+	log.Info("writing cloudflared unit file if configured", "progress", progress)
+	if a.Job.Request.RoutingVersion != nil {
+		log.Info(" yes it's configured")
+		err = a.optConfigureRouting()
+		if err != nil {
+			return err
+		}
+	}
+
 	// start more heavier operation
 	log.Info("downloading .env", "progress", progress)
 	if err := ctx.Err(); err != nil {

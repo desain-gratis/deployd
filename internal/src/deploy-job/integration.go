@@ -31,6 +31,8 @@ type Dependencies struct {
 	// store service's secret
 	SecretUsecase *mycontent_base.Handler[*entity.Secret]
 
+	RoutingUsecase *mycontent_base.Handler[*entity.Routing]
+
 	JobUsecase *mycontent_base.Handler[*entity.DeploymentJob]
 
 	// attachment

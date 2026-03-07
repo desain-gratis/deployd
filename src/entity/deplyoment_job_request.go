@@ -19,6 +19,9 @@ type SubmitDeploymentJobRequest struct {
 	SecretVersion uint64 `json:"secret_version"`
 	EnvVersion    uint64 `json:"env_version"`
 
+	// optional: lookup configure cloudflare routing
+	RoutingVersion *uint64 `json:"routing_version,omitempty"`
+
 	// TODO: List of hosts to deploy to; for first time deployment
 	TargetHosts []Host `json:"target_hosts,omitempty"`
 

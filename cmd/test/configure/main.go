@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	common_entity "github.com/desain-gratis/common/types/entity"
@@ -83,6 +84,7 @@ func initWithTestData(
 	repositoryUsecase := mycontentapiclient.New[*entity.Repository](http.DefaultClient, host+"/artifactd/repository", nil, "")
 	envUsecase := mycontentapiclient.New[*entity.Env](http.DefaultClient, host+"/secretd/env", []string{"service"}, "")
 	secretUsecase := mycontentapiclient.New[*entity.Secret](http.DefaultClient, host+"/secretd/secret", []string{"service"}, "")
+	cloudflareConfigUsecase := mycontentapiclient.New[*entity.Routing](http.DefaultClient, host+"/secretd/routing", []string{"service"}, "")
 
 	// init with one service (a "user-profile" simple app)
 	_, err = serviceDefinitionUsecase.Post(ctx, &entity.ServiceDefinition{
@@ -148,6 +150,19 @@ func initWithTestData(
 	}
 	// init with one repository (a "user-profile" simple app)
 	_, err = secretUsecase.Post(ctx, check, nil)
+	if err != nil {
+		return err
+	}
+
+	cf := &entity.Routing{
+		Ns:      "deployd",
+		Service: "user-profile",
+		CloudflareConfig: &entity.CloudflareConfig{
+			TunnelToken: os.Getenv("CLOUDFLARED_TUNNEL_TOKEN"),
+		},
+		PublishedAt: time.Now(),
+	}
+	_, err = cloudflareConfigUsecase.Post(ctx, cf, nil)
 	if err != nil {
 		return err
 	}

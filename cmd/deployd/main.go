@@ -58,6 +58,9 @@ var (
 	// store service's secret
 	secretUsecase *mycontent_base.Handler[*entity.Secret]
 
+	// store service's routing
+	routingUsecase *mycontent_base.Handler[*entity.Routing]
+
 	jobUsecase               *mycontent_base.Handler[*entity.DeploymentJob]
 	lastSuccessfulJobUsecase *mycontent_base.Handler[*entity.DeploymentJob]
 
@@ -254,6 +257,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 			RaftJobUsecase:           raftDeployjobUsecase,
 			BuildArtifactUsecase:     buildArtifactUsecase,
 			JobUsecase:               jobUsecase,
+			RoutingUsecase:           routingUsecase,
 		},
 		currentHost,
 	)
@@ -315,6 +319,7 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
 			nil,
 			content_chraft.TableConfig{Name: "secretd_secret", RefSize: 1, Versioned: true, VersionedGetLimit: 5},
 			content_chraft.TableConfig{Name: "secretd_env", RefSize: 1, Versioned: true, VersionedGetLimit: 5},
+			content_chraft.TableConfig{Name: "secretd_routing", RefSize: 1, Versioned: true, VersionedGetLimit: 5},
 		),
 	)
 	if err != nil {
@@ -345,6 +350,18 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
 	router.POST("/secretd/env", envHandler.Post)
 	router.GET("/secretd/env", envHandler.Get)
 	router.DELETE("/secretd/env", envHandler.Delete)
+
+	routingStore := content_chraft.NewStorageClient(ctx, "secretd_routing")
+	routingUsecase = mycontent_base.New[*entity.Routing](routingStore, 1)
+	routingHandler := mycontentapi.New(
+		routingUsecase,
+		publicBaseURL+"/secretd/routing",
+		[]string{"service"},
+	)
+
+	router.POST("/secretd/routing", routingHandler.Post)
+	router.GET("/secretd/routing", routingHandler.Get)
+	router.DELETE("/secretd/routing", routingHandler.Delete)
 }
 
 func enableDeploydModule(ctx context.Context, router *httprouter.Router) {

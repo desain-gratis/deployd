@@ -21,6 +21,7 @@ services:
       - ./tmp1/opt:/opt
       - ./tmp1/tmp/:/tmp
       - ./tmp1/systemd/:/etc/systemd/system/
+      - ./tmp1/usr/local/bin/cloudflared:/usr/local/bin/cloudflared
     depends_on:
       - clickhouse-deployd1
       - mock-systemd1
@@ -49,6 +50,7 @@ services:
       - ./tmp2/opt:/opt
       - ./tmp2/tmp/:/tmp
       - ./tmp2/systemd/:/etc/systemd/system/
+      - ./tmp2/usr/local/bin/cloudflared:/usr/local/bin/cloudflared
     depends_on:
       - clickhouse-deployd2
       - mock-systemd2
@@ -77,6 +79,7 @@ services:
       - ./tmp3/opt:/opt
       - ./tmp3/tmp/:/tmp
       - ./tmp3/systemd/:/etc/systemd/system/
+      - ./tmp3/usr/local/bin/cloudflared:/usr/local/bin/cloudflared
     depends_on:
       - clickhouse-deployd3
       - mock-systemd3
@@ -202,7 +205,7 @@ services:
       # Optionally set-up any mock units you need. Service files for these
       # Will be created on service start
       # Because the mock does not support creation using .service file, we put it here (so it always be there)
-      MOCK_SYSTEMD_UNITS: fakemill.service deployd_user-profile.service
+      MOCK_SYSTEMD_UNITS: fakemill.service deployd_user-profile.service cloudflared_deployd_user-profile.service
 
   mock-systemd2:
     image: ghcr.io/balena-os/mock-systemd-bus@sha256:79b92200fb6481edfea9776a75d6bf3fd8583b79b7e83868f49ba7b295f397ce
@@ -217,7 +220,7 @@ services:
       DBUS_SYSTEM_BUS_ADDRESS: unix:path=/shared/dbus/system_bus_socket
       # Optionally set-up any mock units you need. Service files for these
       # Will be created on service start
-      MOCK_SYSTEMD_UNITS: fakemill.service deployd_user-profile.service
+      MOCK_SYSTEMD_UNITS: fakemill.service deployd_user-profile.service cloudflared_deployd_user-profile.service
 
   mock-systemd3:
     image: ghcr.io/balena-os/mock-systemd-bus@sha256:79b92200fb6481edfea9776a75d6bf3fd8583b79b7e83868f49ba7b295f397ce
@@ -232,7 +235,7 @@ services:
       DBUS_SYSTEM_BUS_ADDRESS: unix:path=/shared/dbus/system_bus_socket
       # Optionally set-up any mock units you need. Service files for these
       # Will be created on service start
-      MOCK_SYSTEMD_UNITS: fakemill.service deployd_user-profile.service
+      MOCK_SYSTEMD_UNITS: fakemill.service deployd_user-profile.service cloudflared_deployd_user-profile.service
 
 volumes:
   config:

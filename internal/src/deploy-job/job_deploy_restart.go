@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/v22/dbus"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -39,7 +40,9 @@ func (c *restartHostService) Execute() error {
 	// start tunnel
 
 	config := DeployConfig{
-		ServiceName:   fmt.Sprintf("%s_%s", c.Job.Ns, c.Job.Request.Service.Id),
+		ServiceID: c.Job.Request.Service.Id,
+		Namespace: c.Job.Request.Service.Ns,
+
 		BuildID:       strconv.FormatUint(c.Job.Request.BuildVersion, 10),
 		EnvVersion:    strconv.FormatUint(c.Job.Request.EnvVersion, 10),
 		SecretVersion: strconv.FormatUint(c.Job.Request.SecretVersion, 10),
@@ -55,7 +58,8 @@ func (c *restartHostService) Execute() error {
 }
 
 type DeployConfig struct {
-	ServiceName   string // e.g. "deployd_user-profile"
+	Namespace     string
+	ServiceID     string
 	BuildID       string // e.g. "20260215-abc123"
 	EnvVersion    string
 	RaftVersion   string
@@ -66,15 +70,17 @@ type DeployConfig struct {
 }
 
 func Deploy(ctx context.Context, cfg DeployConfig) error {
-	if cfg.ServiceName == "" || cfg.BuildID == "" {
-		return errors.New("missing service name or build id")
+	if cfg.Namespace == "" || cfg.ServiceID == "" || cfg.BuildID == "" {
+		return errors.New("missing service namespace, name or build id")
 	}
 
 	if cfg.BaseDir == "" {
 		cfg.BaseDir = "/opt"
 	}
 
-	baseDir := filepath.Join(cfg.BaseDir, cfg.ServiceName)
+	serviceName := fmt.Sprintf("%s_%s", cfg.Namespace, cfg.ServiceID)
+
+	baseDir := filepath.Join(cfg.BaseDir, serviceName)
 	releaseDir := filepath.Join(baseDir, "build-release", cfg.BuildID)
 	envReleaseDir := filepath.Join(baseDir, "env-release", cfg.EnvVersion)
 	secretReleaseDir := filepath.Join(baseDir, "secret-release", cfg.SecretVersion)
@@ -82,12 +88,13 @@ func Deploy(ctx context.Context, cfg DeployConfig) error {
 
 	currentLink := filepath.Join(baseDir, "current")
 
-	etcServiceDir := filepath.Join("/etc", cfg.ServiceName)
+	etcServiceDir := filepath.Join("/etc", serviceName)
 	etcEnvLink := filepath.Join(etcServiceDir, "env")
 	etcSecretLink := filepath.Join(etcServiceDir, "secret")
 	etcRaftLink := filepath.Join(etcServiceDir, "raft")
 
-	unitName := cfg.ServiceName + ".service"
+	unitName := serviceName + ".service"
+	cloudflaredUnitName := fmt.Sprintf("cloudflared_%s_%s.service", cfg.Namespace, cfg.ServiceID)
 
 	// 1️⃣ Validate release exists
 	releaseInfo, err := os.Stat(releaseDir)
@@ -150,6 +157,31 @@ func Deploy(ctx context.Context, cfg DeployConfig) error {
 		return err
 	}
 	defer conn.Close()
+
+	// TODO: currently only for cloudflare
+
+	// if _, err := os.Stat(binaryPath)
+	// if ServiceFileExists()
+	found, err := ServiceFileExists(ctx, conn, cloudflaredUnitName)
+	if err != nil {
+		return fmt.Errorf("failed to check cloudflared systemd config exist or not %w", err)
+	}
+	if found {
+		// 6️⃣ Stop cf
+		if err := stopService(ctx, conn, cloudflaredUnitName); err != nil {
+			log.Warn().Msgf("warn cloudflared %v", err) // TODO use slog, differentiate error vs notfound
+		}
+		// after stop & draining traffic.. we go
+
+		defer func() {
+			log.Info().Msgf("starting cloudflare routing")
+			if err := startService(ctx, conn, cloudflaredUnitName); err != nil {
+				log.Warn().Msgf("warn startcloudflared %v", err)
+			}
+		}()
+	}
+
+	// todo all refactorr2
 
 	// 6️⃣ Stop service
 	if err := stopService(ctx, conn, unitName); err != nil {
@@ -306,4 +338,13 @@ func rollbackAll(
 		_ = switchSymlinkAtomic(raftLink, prevRaft)
 	}
 	_ = startService(ctx, conn, unit)
+}
+
+func ServiceFileExists(ctx context.Context, conn *dbus.Conn, name string) (bool, error) {
+	files, err := conn.ListUnitFilesByPatternsContext(ctx, []string{}, []string{name})
+	if err != nil {
+		return false, err
+	}
+
+	return len(files) > 0, nil
 }

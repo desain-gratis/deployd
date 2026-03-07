@@ -1,4 +1,8 @@
+ifneq (,$(wildcard .env))
 include .env
+export
+endif
+
 
 clean-wsl: 
 	docker compose down -v # important for wsl
