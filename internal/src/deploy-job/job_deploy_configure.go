@@ -64,7 +64,7 @@ func (a *configureHost) Execute() error {
 		return fmt.Errorf("error while ensuring secret path %v %w", secretPath, err)
 	}
 
-	raftPath := fmt.Sprintf(basePath+"/raft-release/%s", a.Job.Id) // raft is based on id, and it's a string
+	raftPath := basePath + "/raft-release" // raft is based on id, and it's a string
 	log.Info("ensuring raft release path " + raftPath)
 	err = ensureDir(raftPath)
 	if err != nil {
