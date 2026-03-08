@@ -517,9 +517,9 @@ func configureRaft(log *slog.Logger, raftPath string, currentHost *entity.Host, 
 	}
 	v.Set("host.peer", peers)
 
-	for shardID, replicaConfig := range tmpRaftConfig {
+	for shardID, shardConfig := range job.RaftConfig.Shards {
 		var isBootstrap bool
-		if replicaConfig.v.BootstrapHost == currentHost.Host {
+		if shardConfig.BootstrapHost == currentHost.Host {
 			isBootstrap = true
 		}
 
@@ -528,10 +528,11 @@ func configureRaft(log *slog.Logger, raftPath string, currentHost *entity.Host, 
 		// _ = isBootstrap
 		v.Set(fmt.Sprintf("replica.%v.shard_id", shardID), shardID)
 		v.Set(fmt.Sprintf("replica.%v.bootstrap", shardID), isBootstrap)
-		v.Set(fmt.Sprintf("replica.%v.id", shardID), replicaConfig.v.ID)
-		v.Set(fmt.Sprintf("replica.%v.alias", shardID), replicaConfig.v.Description)
-		v.Set(fmt.Sprintf("replica.%v.description", shardID), replicaConfig.v.Description)
-		v.Set(fmt.Sprintf("replica.%v.type", shardID), replicaConfig.v.Type)
+		v.Set(fmt.Sprintf("replica.%v.id", shardID), shardConfig.ID)
+		v.Set(fmt.Sprintf("replica.%v.shard_id", shardID), shardID)
+		v.Set(fmt.Sprintf("replica.%v.alias", shardID), shardConfig.Description)
+		v.Set(fmt.Sprintf("replica.%v.description", shardID), shardConfig.Description)
+		v.Set(fmt.Sprintf("replica.%v.type", shardID), shardConfig.Type)
 	}
 
 	err = v.WriteConfigTo(f)
