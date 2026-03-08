@@ -26,10 +26,10 @@ type SubmitDeploymentJobRequest struct {
 	TargetHosts []Host `json:"target_hosts,omitempty"`
 
 	// Register (new) replica at the deployment time.
-	RaftReplica      map[uint64]RaftReplicaConfig `json:"raft_replica,omitempty"`
-	RaftPort         uint16                       `json:"raft_port"`
-	RaftPortMapping  map[string]uint16            `json:"raft_port_mapping,omitempty"` // optional if at each host, the port is different
-	RaftDeploymentID uint64                       `json:"raft_deployment_id"`
+	RaftShard        map[uint64]RaftShardConfig `json:"raft_shard,omitempty"`
+	RaftPort         uint16                     `json:"raft_port"`
+	RaftPortMapping  map[string]uint16          `json:"raft_port_mapping,omitempty"` // optional if at each host, the port is different
+	RaftDeploymentID uint64                     `json:"raft_deployment_id"`
 
 	ModifyKey *string `json:"-"` // hidden; TODO: to be nice, to lock, only the one who have this key can modify the state.
 
@@ -48,8 +48,8 @@ type SubmitDeploymentJobRequest struct {
 	PublishedAt time.Time `json:"published_at"`
 }
 
-type RaftReplicaConfig struct {
-	BootstrapHost string `json:"bootstrap_host"`
+type RaftShardConfig struct {
+	BootstrapHost string `json:"bootstrap_host"` // overwritten in http integration
 	ShardID       uint64 `json:"shard_id"`
 	ID            string `json:"id"`
 	Type          string `json:"type"`

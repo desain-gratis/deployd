@@ -86,7 +86,7 @@ type DeploymentJob struct {
 
 type RaftConfig struct {
 	Service map[string]RaftServiceConfig `json:"service,omitempty"`
-	Replica map[uint64]RaftReplicaConfig `json:"replica,omitempty"`
+	Shards  map[uint64]RaftShardConfig   `json:"shards,omitempty"`
 }
 
 // For front end to render the CTA, if "believe"(aka.auto confirm) is not specified

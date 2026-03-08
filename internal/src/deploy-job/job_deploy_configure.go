@@ -461,11 +461,11 @@ func isEmptyDir(dir string) (bool, error) {
 
 // todo refactor to make it more natural, eg. by using context
 func configureRaft(log *slog.Logger, raftPath string, currentHost *entity.Host, job *entity.DeploymentJob) error {
-	replicaConfig := job.RaftConfig.Replica
+	shardsConfig := job.RaftConfig.Shards
 
 	type kv struct {
 		key uint64
-		v   entity.RaftReplicaConfig
+		v   entity.RaftShardConfig
 	}
 
 	// hostConfig := job.Target[0]
@@ -481,8 +481,8 @@ func configureRaft(log *slog.Logger, raftPath string, currentHost *entity.Host, 
 		return nil // fmt.Errorf("should not be deployed here.")
 	}
 
-	tmpRaftConfig := make([]kv, 0, len(replicaConfig))
-	for shardID, v := range replicaConfig {
+	tmpRaftConfig := make([]kv, 0, len(shardsConfig))
+	for shardID, v := range shardsConfig {
 		tmpRaftConfig = append(tmpRaftConfig, kv{shardID, v})
 	}
 

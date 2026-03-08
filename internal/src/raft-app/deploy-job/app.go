@@ -155,7 +155,7 @@ func (m *raftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploy
 		return nil, err
 	}
 
-	raftReplica, err := m.getRaftReplicaConfig(previousJob, deploymentTarget, request)
+	raftShards, err := m.getRaftShardsConfig(previousJob, deploymentTarget, request)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +171,7 @@ func (m *raftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploy
 	}
 	job.Target = deploymentTarget
 	job.RaftConfig = &entity.RaftConfig{
-		Replica: raftReplica,
+		Shards:  raftShards,
 		Service: raftServiceConfig,
 	}
 	job.Request = &request
@@ -575,10 +575,10 @@ func (m *raftApp) getRaftServiceConfig(previousJob *entity.DeploymentJob, target
 	return result, nil
 }
 
-func (m *raftApp) getRaftReplicaConfig(previousJob *entity.DeploymentJob, target []entity.Host, request entity.SubmitDeploymentJobRequest) (map[uint64]entity.RaftReplicaConfig, error) {
+func (m *raftApp) getRaftShardsConfig(previousJob *entity.DeploymentJob, target []entity.Host, request entity.SubmitDeploymentJobRequest) (map[uint64]entity.RaftShardConfig, error) {
 	if previousJob != nil {
 		// TODO: we can do merging later, in case we want to add new replica (or remove one, if possible)
-		return previousJob.RaftConfig.Replica, nil
+		return previousJob.RaftConfig.Shards, nil
 	}
 
 	bootstrapHost, err := getLeaderByTarget(target)
@@ -586,14 +586,14 @@ func (m *raftApp) getRaftReplicaConfig(previousJob *entity.DeploymentJob, target
 		return nil, err
 	}
 
-	replica := make(map[uint64]entity.RaftReplicaConfig)
-	for shardID, rep := range request.RaftReplica {
-		replica[rep.ShardID] = entity.RaftReplicaConfig{
-			BootstrapHost: bootstrapHost.Host,
+	replica := make(map[uint64]entity.RaftShardConfig)
+	for shardID, req := range request.RaftShard {
+		replica[req.ShardID] = entity.RaftShardConfig{
+			BootstrapHost: bootstrapHost.Host, // server overwrite
 			ShardID:       shardID,
-			ID:            rep.ID,
-			Type:          rep.Type,
-			Description:   rep.Description,
+			ID:            req.ID,
+			Type:          req.Type,
+			Description:   req.Description,
 		}
 	}
 
