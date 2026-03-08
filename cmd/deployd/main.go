@@ -197,7 +197,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 				continue
 			}
 
-			log.Error().Msgf("msg=%v", msga["msg"])
+			log.Info().Msgf("msg=%v", msga["msg"])
 		}
 	}()
 
