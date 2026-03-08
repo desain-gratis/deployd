@@ -72,7 +72,7 @@ func main() {
 		Handler: router,
 	}
 
-	log.Info().Msgf("User profile service is running at http://0.0.0.0:10001")
+	log.Info().Msgf("Baruu. User profile service is running at http://0.0.0.0:10001")
 
 	server.ListenAndServe()
 }

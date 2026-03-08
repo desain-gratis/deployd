@@ -41,7 +41,6 @@ jobs:
           mkdir -p dist
           GOOS=linux GOARCH=amd64 go build -o dist/user-profile -v ./cmd/test/user-profile/*.go
           chmod u+x dist/user-profile
-          cp ./config/deployd/*.yml dist
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
