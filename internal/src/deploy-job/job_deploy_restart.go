@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/v22/dbus"
-	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -51,7 +50,7 @@ func (c *restartHostService) Execute() error {
 		Timeout:       8 * time.Hour,
 	}
 
-	return Deploy(c.ctx, config)
+	return Deploy(c.log, c.ctx, config)
 
 	// return errors.New("not implemented yet")
 }
@@ -67,7 +66,7 @@ type DeployConfig struct {
 	Timeout       time.Duration // optional
 }
 
-func Deploy(ctx context.Context, cfg DeployConfig) error {
+func Deploy(log *slog.Logger, ctx context.Context, cfg DeployConfig) error {
 	if cfg.Namespace == "" || cfg.ServiceID == "" || cfg.BuildID == "" {
 		return errors.New("missing service namespace, name or build id")
 	}
@@ -163,16 +162,17 @@ func Deploy(ctx context.Context, cfg DeployConfig) error {
 		return fmt.Errorf("failed to check cloudflared systemd config exist or not %w", err)
 	}
 	if found {
+		log.Info("draining cloudflare connection")
 		// 6️⃣ Stop cf
 		if err := stopService(ctx, conn, cloudflaredUnitName); err != nil {
-			log.Warn().Msgf("warn cloudflared %v", err) // TODO use slog, differentiate error vs notfound
+			log.Warn(fmt.Sprintf("warn cloudflared %v", err)) // TODO use slog, differentiate error vs notfound
 		}
 		// after stop & draining traffic.. we go
 
 		defer func() {
-			log.Info().Msgf("starting cloudflare routing")
+			log.Info("starting cloudflare routing")
 			if err := startService(ctx, conn, cloudflaredUnitName); err != nil {
-				log.Warn().Msgf("warn startcloudflared %v", err)
+				log.Warn(fmt.Sprintf("warn startcloudflared %v", err))
 			}
 		}()
 	}
@@ -184,7 +184,11 @@ func Deploy(ctx context.Context, cfg DeployConfig) error {
 		return err
 	}
 
+	log.Info("service stopped")
+
 	// TODO: refactor this for revert logic cancel, etc.
+
+	log.Info("updating links")
 
 	// 7️⃣ Backup previous symlinks for rollback
 	prevBuildTarget, _ := os.Readlink(currentLink)
@@ -225,7 +229,10 @@ func Deploy(ctx context.Context, cfg DeployConfig) error {
 		return fmt.Errorf("failed to switch raft symlink: %w", err)
 	}
 
+	log.Info("links updated")
+
 	// 🔟 Start service
+	log.Info(fmt.Sprintf("starting service %v ...", unitName))
 	if err := startService(ctx, conn, unitName); err != nil {
 		rollbackAll(currentLink, prevBuildTarget,
 			etcEnvLink, prevEnvTarget,
@@ -235,7 +242,9 @@ func Deploy(ctx context.Context, cfg DeployConfig) error {
 	}
 
 	// 1️⃣1️⃣ Verify active state
+	log.Info(fmt.Sprintf("verifying that the service is active %v ...", unitName))
 	active, err := isActive(ctx, conn, unitName)
+	log.Info(fmt.Sprintf("verifying that the service is active ... %v %v %v", unitName, active, err))
 	if err != nil || !active {
 		rollbackAll(currentLink, prevBuildTarget,
 			etcEnvLink, prevEnvTarget,
@@ -243,6 +252,9 @@ func Deploy(ctx context.Context, cfg DeployConfig) error {
 			conn, ctx, unitName)
 		return fmt.Errorf("service failed health check after start: %v", err)
 	}
+
+	// TODO: add healthcheck
+	log.Info("healthcheck not implemented yet")
 
 	return nil
 }

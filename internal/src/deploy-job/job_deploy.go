@@ -160,7 +160,7 @@ func (d *deploymentJob) startRestartHostService() {
 		errMsg = &errStr
 		log.Error("failed to restart service: " + errStr)
 	} else {
-		log.Info("successfully restarting service")
+		log.Info("successfully restarted service")
 	}
 
 	d.State.RestartServiceStatus = terminalStatus

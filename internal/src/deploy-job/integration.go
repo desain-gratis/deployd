@@ -41,6 +41,8 @@ type Dependencies struct {
 
 	RoutingUsecase *mycontent_base.Handler[*entity.Routing]
 
+	BuildUsecase *mycontent_base.Handler[*entity.BuildArtifact]
+
 	JobUsecase *mycontent_base.Handler[*entity.DeploymentJob]
 
 	// attachment

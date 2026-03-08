@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -49,6 +48,8 @@ var (
 
 	// archive / artifact repository storing build & archive information
 	repositoryUsecase *mycontent_base.Handler[*entity.Repository]
+
+	buildUsecase *mycontent_base.Handler[*entity.BuildArtifact]
 
 	// store service's env
 	envUsecase *mycontent_base.Handler[*entity.Env]
@@ -190,26 +191,13 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	logSubscription.Start()
 
 	go func() {
-		buf := bytes.NewBuffer(make([]byte, 0, 1000))
 		for msg := range logSubscription.Listen() {
 			msga, ok := msg.(deployjobintegration.Log)
 			if !ok {
 				continue
 			}
-			level := "INFO"
-			for k, v := range msga {
-				if k == "level" {
-					level, _ = v.(string)
-					continue
-				}
-				fmt.Fprintf(buf, "%v=%v ", k, v)
-			}
-			if level == "INFO" {
-				log.Info().Msg(buf.String())
-			} else {
-				log.Error().Msg(buf.String())
-			}
-			buf.Reset()
+
+			log.Error().Msgf("msg=%v", msga["msg"])
 		}
 	}()
 
@@ -267,6 +255,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 			BuildArtifactUsecase:     buildArtifactUsecase,
 			JobUsecase:               jobUsecase,
 			RoutingUsecase:           routingUsecase,
+			BuildUsecase:             buildUsecase,
 		},
 		currentHost,
 	)
@@ -488,11 +477,13 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router) {
 		nil,
 	)
 
-	buildHandler := mycontentapi.NewFromStorage[*entity.BuildArtifact](
+	buildStorage := content_chraft.NewStorageClient(ctx, "artifactd__build")
+	buildUsecase = mycontent_base.New[*entity.BuildArtifact](buildStorage, 1)
+
+	buildHandler := mycontentapi.New(
+		buildUsecase,
 		publicBaseURL+"/artifactd/build",
 		[]string{"repository"},
-		content_chraft.NewStorageClient(ctx, "artifactd__build"),
-		1,
 	)
 
 	buildArtifactUsecase = mycontent_base.NewAttachment(

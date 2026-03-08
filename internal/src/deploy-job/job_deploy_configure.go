@@ -163,6 +163,17 @@ func (a *configureHost) Execute() error {
 
 		env := envData[0]
 
+		buildData, err := a.dependencies.BuildUsecase.Get(
+			ctx,
+			a.Job.Request.Service.Ns,
+			[]string{a.Job.Request.Service.Repository.ID},
+			fmt.Sprintf("%v", a.Job.Request.BuildVersion), // attachment can have one to many, so we're restricting to one
+		)
+		if err != nil {
+			return fmt.Errorf("error while getting build artifact: %w", err)
+		}
+		build := buildData[0]
+
 		tmpEnv := make([]string, 0, len(env.Value))
 		for k, v := range env.Value {
 			tmpEnv = append(tmpEnv, fmt.Sprintf("%v=%v", strings.ToUpper(k), strconv.Quote(v)))
@@ -189,6 +200,10 @@ func (a *configureHost) Execute() error {
 		// TODO: move all overwrite here instead of systemd service definition
 		fmt.Fprintf(f, "%s=%v\n", "DEPLOYD_HOST", a.host.Host)
 		fmt.Fprintf(f, "%s=%v\n", "DEPLOYD_HOST_REPLICA_ID", a.host.RaftConfig.ReplicaID)
+		fmt.Fprintf(f, "%s=%v\n", "DEPLOYD_SERVICE_BUILD_COMMIT_ID", build.CommitID)
+		fmt.Fprintf(f, "%s=%v\n", "DEPLOYD_SERVICE_BUILD_ID", build.Id)
+		fmt.Fprintf(f, "%s=%v\n", "DEPLOYD_SERVICE_BUILD_DATE", build.PublishedAt)
+		fmt.Fprintf(f, "%s=%v\n", "DEPLOYD_SERVICE_BUILD_TAG", build.Tag)
 
 		return nil
 	}()
@@ -292,17 +307,6 @@ func (a *configureHost) Execute() error {
 		return fmt.Errorf("error while ensuring build release path in %v %w", buildReleasePath, err)
 	}
 
-	// TODO: use per file based check / more robust approach;
-	isBuildEmpty, err := isEmptyDir(buildReleasePath)
-	if err != nil {
-		return fmt.Errorf("error while ensuring build release path in %v %w", buildReleasePath, err)
-	}
-
-	// TODO: remove this; after finding a way to optimize use installation
-	if !isBuildEmpty {
-		return nil
-	}
-
 	progress = 2 / float64(4)
 
 	log.Info("downloading build artifact", "progress", progress)
@@ -356,6 +360,8 @@ func (a *configureHost) Execute() error {
 	if err != nil {
 		return fmt.Errorf("error while ensuring artifact dir %w", err)
 	}
+
+	log.Info(fmt.Sprintf("remove all at %v", tmp))
 	err = os.RemoveAll(tmp)
 	if err != nil {
 		return fmt.Errorf("error while removing old artifact %w", err)
@@ -368,11 +374,13 @@ func (a *configureHost) Execute() error {
 
 	// TODO: check if there is old version; old version is used
 
+	log.Info(fmt.Sprintf("remove all at %v", buildReleasePath))
 	err = os.RemoveAll(buildReleasePath) // delete previous
 	if err != nil {
 		return fmt.Errorf("error while deleting previous artifact: %w", err)
 	}
 
+	log.Info(fmt.Sprintf("replacing the old %v with new %v", tmp, buildReleasePath))
 	err = os.Rename(tmp, buildReleasePath)
 	if err != nil {
 		return fmt.Errorf("error while replacing artifact: %w", err)
@@ -411,6 +419,11 @@ func (a *configureHost) Execute() error {
 
 		if loadState != "loaded" {
 			return fmt.Errorf("service is not loaded. found '%v' state instead for service '%v'", loadState, serviceName)
+		}
+
+		_, _, err = conn.EnableUnitFilesContext(ctx, []string{serviceName}, false, true)
+		if err != nil {
+			return fmt.Errorf("systemd enable load error: %v", err)
 		}
 
 		return nil

@@ -27,6 +27,10 @@ func main() {
 		fmt.Fprint(w, "Latest! In place edit in github 🌴✅🌞\n")
 		key := "MESSAGE"
 		fmt.Fprintf(w, "Env read: %v = %v.\n", key, os.Getenv(key))
+		fmt.Fprintf(w, "Env read: %v = %v.\n", "DEPLOYD_SERVICE_BUILD_COMMIT_ID", os.Getenv("DEPLOYD_SERVICE_BUILD_COMMIT_ID"))
+		fmt.Fprintf(w, "Env read: %v = %v.\n", "DEPLOYD_SERVICE_BUILD_ID", os.Getenv("DEPLOYD_SERVICE_BUILD_ID"))
+		fmt.Fprintf(w, "Env read: %v = %v.\n", "DEPLOYD_SERVICE_BUILD_DATE", os.Getenv("DEPLOYD_SERVICE_BUILD_DATE"))
+		fmt.Fprintf(w, "Env read: %v = %v.\n", "DEPLOYD_SERVICE_BUILD_TAG", os.Getenv("DEPLOYD_SERVICE_BUILD_TAG"))
 	})
 
 	config := viper.New()
@@ -41,7 +45,7 @@ func main() {
 		config.GetString("storage.clickhouse.replica.address"),
 		config.GetString("storage.clickhouse.replica.username"),
 		config.GetString("storage.clickhouse.replica.password"),
-		fmt.Sprintf("deployd-%v", os.Getenv("DEPLOYD_HOST_REPLICA_ID")),
+		fmt.Sprintf("user-profile-%v", os.Getenv("DEPLOYD_HOST_REPLICA_ID")),
 	)
 
 	ctx, err = raftr.RunReplica[any](
