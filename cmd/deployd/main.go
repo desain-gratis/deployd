@@ -661,7 +661,6 @@ func filterWorkerLog(reqNs, reqSrv, reqId string) func(any) bool {
 func transformDeployJobEvent(msg any) any {
 	var eventName string
 	var job *entity.DeploymentJob
-	var keepRequest bool
 
 	switch value := msg.(type) {
 	case deployjob.EventDeploymentJobFailed:
@@ -694,7 +693,6 @@ func transformDeployJobEvent(msg any) any {
 	case deployjob.EventDeploymentJobSuccess:
 		eventName = "deployment-job-update"
 		job = &value.Job
-		keepRequest = true
 	}
 
 	if job == nil {
@@ -703,7 +701,7 @@ func transformDeployJobEvent(msg any) any {
 
 	job.RaftConfig = nil
 	job.Target = nil
-	if !keepRequest {
+	if job.Status != "DEPLOYED" {
 		job.Request = nil
 	}
 
