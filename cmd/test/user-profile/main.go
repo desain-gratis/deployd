@@ -11,7 +11,6 @@ import (
 	content_chraft "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/clickhouse-raft"
 	raftr "github.com/desain-gratis/common/lib/raft/runner"
 	"github.com/desain-gratis/deployd/src/deployd"
-	"github.com/desain-gratis/deployd/src/entity"
 	"github.com/julienschmidt/httprouter"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
@@ -52,7 +51,7 @@ func main() {
 		ctx,
 		"user-profile-v1",
 		content_chraft.New(
-			content_chraft.TableConfig{Name: "user_profile"},
+			content_chraft.TableConfig{Name: "user_profile", RefSize: 0},
 		),
 	)
 	if err != nil {
@@ -60,7 +59,7 @@ func main() {
 	}
 
 	userProfileStore := content_chraft.NewStorageClient(ctx, "user_profile")
-	userProfileUsecase := mycontent_base.New[*entity.Secret](userProfileStore, 0)
+	userProfileUsecase := mycontent_base.New[*UserProfile](userProfileStore, 0)
 	userProfileHandler := mycontentapi.New(
 		userProfileUsecase,
 		"/profile",
