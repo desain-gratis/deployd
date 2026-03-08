@@ -699,9 +699,9 @@ func transformDeployJobEvent(msg any) any {
 		return "-"
 	}
 
-	job.RaftConfig = nil
-	job.Target = nil
 	if job.Status != "DEPLOYED" {
+		job.Target = nil
+		job.RaftConfig = nil
 		job.Request = nil
 	}
 
