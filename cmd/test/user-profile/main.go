@@ -32,7 +32,7 @@ func main() {
 	config := viper.New()
 	err := deployd.InjectSecretToViper(config)
 
-	err = raftr.Init()
+	err = raftr.InitWithConfigFile(os.Getenv("DEPLOYD_RAFT"))
 	if err != nil {
 		log.Fatal().Msgf("err raft: %v", err)
 	}

@@ -366,6 +366,8 @@ func (a *configureHost) Execute() error {
 		return fmt.Errorf("error while extracting artifact file: %w", err)
 	}
 
+	// TODO: check if there is old version; old version is used
+
 	err = os.RemoveAll(buildReleasePath) // delete previous
 	if err != nil {
 		return fmt.Errorf("error while deleting previous artifact: %w", err)
