@@ -67,10 +67,4 @@ type RaftHostConfig struct {
 	BaseWALDir      string `json:"base_wal_dir"`
 	BaseNodeHostDir string `json:"base_node_host_dir"`
 	RTTMillisecond  uint64 `json:"rtt_millisecond"`
-
-	ClickhouseStateStore ClickhouseStateSorageConfig `json:"clickhouse_state_store"`
-}
-
-type ClickhouseStateSorageConfig struct {
-	Address string `json:"address"`
 }

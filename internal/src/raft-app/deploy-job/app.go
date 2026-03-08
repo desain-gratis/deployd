@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	TableDeploymentJob     = "deployment_job"
-	TableDeploymentSuccess = "deployment_success"
+	TableDeploymentJob     = "deploy_job__deployment_job"
+	TableDeploymentSuccess = "deploy_job__deployment_success"
 
 	CommandUserSubmitJob raft.Command = "deployd.user.submit-job"
 	CommandUserCancelJob raft.Command = "deployd.user.cancel-job"
@@ -56,7 +56,6 @@ type raftApp struct {
 
 func New(topic notifier.Topic) *raftApp {
 	stateStore := content_chraft.New(
-		topic,
 		content_chraft.TableConfig{Name: TableDeploymentJob, RefSize: 1, Versioned: true, VersionedGetLimit: 10},
 		content_chraft.TableConfig{Name: TableDeploymentSuccess, RefSize: 0},
 	)

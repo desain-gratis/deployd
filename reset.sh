@@ -2,9 +2,9 @@ ssh root@mb1 "sudo systemctl stop deployd"
 ssh root@mb3 "sudo systemctl stop deployd"
 ssh root@mb3 "sudo systemctl stop deployd"
 
-ssh root@mb1  "rm -rf /opt/deployd/data/*"
-ssh root@mb2  "rm -rf /opt/deployd/data/*"
-ssh root@mb3  "rm -rf /opt/deployd/data/*"
+ssh root@mb1  "rm -rf /opt/deployd/data/* && rm -rf /data/raft"
+ssh root@mb2  "rm -rf /opt/deployd/data/* && rm -rf /data/raft"
+ssh root@mb3  "rm -rf /opt/deployd/data/* && rm -rf /data/raft"
 
 clickhouse-client -h clickhouse-darurat --password default -q 'drop database IF EXISTS "deployd-v1_1_1"'
 clickhouse-client -h clickhouse-darurat --password default -q 'drop database IF EXISTS "deployd-v1_1_2"'

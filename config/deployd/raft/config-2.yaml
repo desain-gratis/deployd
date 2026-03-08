@@ -8,8 +8,6 @@ host:
         1: "deployd1:21511"
         2: "deployd2:21512"
         3: "deployd3:21513"
-    clickhouse: 
-        address: clickhouse-deployd2:9000
 replica:
     1:
         bootstrap: false

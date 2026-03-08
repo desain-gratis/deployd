@@ -8,8 +8,6 @@ raft:
   replica_id: 1
   base_node_host_dir: "/data"
   base_wal_dir: "/data"
-  clickhouse:
-    address: "clickhouse-deployd1:9000"
 
 http:
   public:
@@ -29,8 +27,8 @@ storage:
       bucket_name: sewatenan-bucket
       base_public_url: http://localhost:9000/sewatenan-bucket
   clickhouse:
-    content:
-      address: "clickhouse-content:9000"
+    replica:
+      address: "clickhouse-deployd1:9000"
       username: <secret>
       password: <secret>
       database: default

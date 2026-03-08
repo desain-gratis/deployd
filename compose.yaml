@@ -9,6 +9,7 @@ services:
       TZ: Asia/Jakarta
       DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
       DEPLOYD_SECRET: /etc/deployd/local.yml.secret
+      DEPLOYD_RAFT: /etc/dragonboat.yaml
     ports:
       - "9401:9600"
     volumes:
@@ -38,6 +39,7 @@ services:
       TZ: Asia/Jakarta
       DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
       DEPLOYD_SECRET: /etc/deployd/local.yml.secret
+      DEPLOYD_RAFT: /etc/dragonboat.yaml
     ports:
       - "9402:9600"
     volumes:
@@ -67,6 +69,7 @@ services:
       TZ: Asia/Jakarta
       DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
       DEPLOYD_SECRET: /etc/deployd/local.yml.secret
+      DEPLOYD_RAFT: /etc/dragonboat.yaml
     ports:
       - "9403:9600"
     volumes:

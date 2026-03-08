@@ -241,6 +241,16 @@ func (a *configureHost) Execute() error {
 			v.Set(secret.key, secret.v)
 		}
 
+		// append with local connection info for secret;
+		// with the same structure as deployd itself
+
+		// todo: we create username & password, and authorize the DB creation name for them
+		// for now this is suffice..
+		v.Set("storage.clickhouse.replica.address", a.dependencies.HostConfig.LocalClickhouseConfig.Address)
+		v.Set("storage.clickhouse.replica.database", fmt.Sprintf("%s__%s", a.Job.Request.Ns, a.Job.Request.Service.Id))
+		v.Set("storage.clickhouse.replica.username", a.dependencies.HostConfig.LocalClickhouseConfig.Username)
+		v.Set("storage.clickhouse.replica.password", a.dependencies.HostConfig.LocalClickhouseConfig.Password)
+
 		err = v.WriteConfigTo(f)
 		if err != nil {
 			return fmt.Errorf("failed to write .yaml secret %w", err)
@@ -481,7 +491,6 @@ func configureRaft(log *slog.Logger, raftPath string, currentHost *entity.Host, 
 	v.Set("host.wal_dir", fmt.Sprintf("%s/%s_%s", currentHost.RaftConfig.BaseWALDir, job.Ns, job.Request.Service.Id))
 	v.Set("host.nodehost_dir", fmt.Sprintf("%s/%s_%s", currentHost.RaftConfig.BaseNodeHostDir, job.Ns, job.Request.Service.Id))
 	v.Set("host.deployment_id", raftService.DeploymentID)
-	v.Set("host.clickhouse.address", currentHost.RaftConfig.ClickhouseStateStore.Address)
 
 	peers := make(map[uint64]string)
 	for _, peer := range job.RaftConfig.Service {
@@ -508,7 +517,7 @@ func configureRaft(log *slog.Logger, raftPath string, currentHost *entity.Host, 
 
 	err = v.WriteConfigTo(f)
 	if err != nil {
-		return fmt.Errorf("failed to write .yaml secret %w", err)
+		return fmt.Errorf("failed to write .yaml raft %w", err)
 	}
 
 	return nil

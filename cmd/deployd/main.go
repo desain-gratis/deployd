@@ -47,8 +47,6 @@ var (
 	// service configuration (to be installed on the host)
 	serviceDefinitionUsecase *mycontent_base.Handler[*entity.ServiceDefinition]
 
-	serviceDeploymentUsecase *mycontent_base.Handler[*entity.ServiceInstanceHost]
-
 	// archive / artifact repository storing build & archive information
 	repositoryUsecase *mycontent_base.Handler[*entity.Repository]
 
@@ -88,9 +86,6 @@ func main() {
 			BaseWALDir:      config.GetString("raft.base_wal_dir"),
 			BaseNodeHostDir: config.GetString("raft.base_node_host_dir"),
 			RTTMillisecond:  900,
-			ClickhouseStateStore: entity.ClickhouseStateSorageConfig{
-				Address: config.GetString("raft.clickhouse.address"),
-			},
 		},
 		PublishedAt: time.Now(),
 	}
@@ -105,10 +100,18 @@ func main() {
 	// All event regarding job lifecycle will be published to this topic
 	deploydTopic = notifier_impl.NewStandardTopic()
 
-	err = raftr.Init()
+	err = raftr.InitWithConfigFile(os.Getenv("DEPLOYD_RAFT"))
 	if err != nil {
 		log.Panic().Msgf("failed to init raft: %v", err)
 	}
+
+	// todo: refactor raftr API
+	raftr.WithClickhouseStorage(
+		config.GetString("storage.clickhouse.replica.address"),
+		config.GetString("storage.clickhouse.replica.username"),
+		config.GetString("storage.clickhouse.replica.password"),
+		fmt.Sprintf("deployd-%v", currentHost.RaftConfig.ReplicaID),
+	)
 
 	wg := new(sync.WaitGroup)
 	router := httprouter.New()
@@ -220,7 +223,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	}
 
 	// "ordinary" mycontent
-	jobStore := content_chraft.NewStorageClient(ctx, deployjob.TableDeploymentJob)
+	jobStore := content_chraft.NewStorageClient(ctx, deployjob.TableDeploymentJob) // convention
 	jobUsecase = mycontent_base.New[*entity.DeploymentJob](jobStore, 1)
 	jobHandler := mycontentapi.New(
 		jobUsecase,
@@ -248,9 +251,15 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 		ctx,
 		deploydTopic,
 		&deployjobintegration.Dependencies{
+			HostConfig: deployjobintegration.HostConfig{
+				LocalClickhouseConfig: deployjobintegration.LocalClickhouseConfig{
+					Address:  config.GetString("storage.clickhouse.replica.address"),
+					Username: config.GetString("storage.clickhouse.replica.username"),
+					Password: config.GetString("storage.clickhouse.replica.username"),
+				},
+			},
 			HostConfigUsecase:        hostConfigUsecase,
 			ServiceDefinitionUsecase: serviceDefinitionUsecase,
-			ServiceDeploymentUsecase: serviceDeploymentUsecase,
 			RepositoryUsecase:        repositoryUsecase,
 			EnvUsecase:               envUsecase,
 			SecretUsecase:            secretUsecase,
@@ -316,17 +325,16 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
 		ctx,
 		"secretd-v1",
 		content_chraft.New(
-			nil,
-			content_chraft.TableConfig{Name: "secretd_secret", RefSize: 1, Versioned: true, VersionedGetLimit: 5},
-			content_chraft.TableConfig{Name: "secretd_env", RefSize: 1, Versioned: true, VersionedGetLimit: 5},
-			content_chraft.TableConfig{Name: "secretd_routing", RefSize: 1, Versioned: true, VersionedGetLimit: 5},
+			content_chraft.TableConfig{Name: "secretd__secret", RefSize: 1, Versioned: true, VersionedGetLimit: 5},
+			content_chraft.TableConfig{Name: "secretd__env", RefSize: 1, Versioned: true, VersionedGetLimit: 5},
+			content_chraft.TableConfig{Name: "secretd__routing", RefSize: 1, Versioned: true, VersionedGetLimit: 5},
 		),
 	)
 	if err != nil {
 		log.Panic().Msgf("failed to run secretd raft: %v", err)
 	}
 
-	secretStore := content_chraft.NewStorageClient(ctx, "secretd_secret")
+	secretStore := content_chraft.NewStorageClient(ctx, "secretd__secret")
 	secretUsecase = mycontent_base.New[*entity.Secret](secretStore, 1)
 	secretHandler := mycontentapi.New(
 		secretUsecase,
@@ -334,7 +342,7 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
 		[]string{"service"},
 	)
 
-	envStore := content_chraft.NewStorageClient(ctx, "secretd_env")
+	envStore := content_chraft.NewStorageClient(ctx, "secretd__env")
 	envUsecase = mycontent_base.New[*entity.Env](envStore, 1)
 	envHandler := mycontentapi.New(
 		envUsecase,
@@ -351,7 +359,7 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
 	router.GET("/secretd/env", envHandler.Get)
 	router.DELETE("/secretd/env", envHandler.Delete)
 
-	routingStore := content_chraft.NewStorageClient(ctx, "secretd_routing")
+	routingStore := content_chraft.NewStorageClient(ctx, "secretd__routing")
 	routingUsecase = mycontent_base.New[*entity.Routing](routingStore, 1)
 	routingHandler := mycontentapi.New(
 		routingUsecase,
@@ -368,11 +376,11 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 	ctx, err := raftr.RunReplica[any](
 		ctx,
 		"deployd-v1",
-		content_chraft.New(nil,
-			content_chraft.TableConfig{Name: "deployd_host", RefSize: 0},
-			content_chraft.TableConfig{Name: "deployd_service", RefSize: 0},
-			content_chraft.TableConfig{Name: "deployd_raft_host", RefSize: 1},
-			content_chraft.TableConfig{Name: "deployd_raft_replica", RefSize: 1},
+		content_chraft.New(
+			content_chraft.TableConfig{Name: "deployd__host", RefSize: 0},
+			content_chraft.TableConfig{Name: "deployd__service", RefSize: 0},
+			content_chraft.TableConfig{Name: "deployd__raft_host", RefSize: 1},
+			content_chraft.TableConfig{Name: "deployd__raft_replica", RefSize: 1},
 		),
 	)
 	if err != nil {
@@ -380,7 +388,7 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 	}
 
 	// config storage
-	hostConfigStore := content_chraft.NewStorageClient(ctx, "deployd_host")
+	hostConfigStore := content_chraft.NewStorageClient(ctx, "deployd__host")
 	hostConfigUsecase = mycontent_base.New[*entity.Host](hostConfigStore, 0)
 	hostConfigHandler := mycontentapi.New(
 		hostConfigUsecase,
@@ -388,7 +396,7 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 		nil,
 	)
 
-	serviceDefinitionStorage := content_chraft.NewStorageClient(ctx, "deployd_service")
+	serviceDefinitionStorage := content_chraft.NewStorageClient(ctx, "deployd__service")
 	serviceDefinitionUsecase = mycontent_base.New[*entity.ServiceDefinition](serviceDefinitionStorage, 0)
 	serviceDefinitionHandler := mycontentapi.New(
 		serviceDefinitionUsecase,
@@ -396,20 +404,17 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 		nil,
 	)
 
-	serviceDeploymentStorage := content_chraft.NewStorageClient(ctx, "deployd_service_deployment")
-	serviceDeploymentUsecase = mycontent_base.New[*entity.ServiceInstanceHost](serviceDeploymentStorage, 2) // TODO: delete
-
 	raftHostHandler := mycontentapi.NewFromStorage[*entity.RaftHost](
 		publicBaseURL+"/deployd/raft/host",
 		[]string{"service"},
-		content_chraft.NewStorageClient(ctx, "deployd_raft_host"),
+		content_chraft.NewStorageClient(ctx, "deployd__raft_host"),
 		1,
 	)
 
 	raftReplicaHandler := mycontentapi.NewFromStorage[*entity.RaftReplica](
 		publicBaseURL+"/deployd/raft/replica",
 		[]string{"service"},
-		content_chraft.NewStorageClient(ctx, "deployd_raft_replica"),
+		content_chraft.NewStorageClient(ctx, "deployd__raft_replica"),
 		1,
 	)
 
@@ -453,10 +458,9 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router) {
 		ctx,
 		"artifactd-v1",
 		content_chraft.New(
-			nil,
-			content_chraft.TableConfig{Name: "artifactd_repository", RefSize: 0},
-			content_chraft.TableConfig{Name: "artifactd_build", RefSize: 1, Versioned: true},
-			content_chraft.TableConfig{Name: "artifactd_archive", RefSize: 2},
+			content_chraft.TableConfig{Name: "artifactd__repository", RefSize: 0},
+			content_chraft.TableConfig{Name: "artifactd__build", RefSize: 1, Versioned: true},
+			content_chraft.TableConfig{Name: "artifactd__archive", RefSize: 2},
 		),
 	)
 	if err != nil {
@@ -475,7 +479,7 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router) {
 		log.Fatal().Msgf("failure to create blob storage client: %v", err)
 	}
 
-	repositoryStorage := content_chraft.NewStorageClient(ctx, "artifactd_repository")
+	repositoryStorage := content_chraft.NewStorageClient(ctx, "artifactd__repository")
 	repositoryUsecase = mycontent_base.New[*entity.Repository](repositoryStorage, 0)
 
 	repositoryHandler := mycontentapi.New(
@@ -487,12 +491,12 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router) {
 	buildHandler := mycontentapi.NewFromStorage[*entity.BuildArtifact](
 		publicBaseURL+"/artifactd/build",
 		[]string{"repository"},
-		content_chraft.NewStorageClient(ctx, "artifactd_build"),
+		content_chraft.NewStorageClient(ctx, "artifactd__build"),
 		1,
 	)
 
 	buildArtifactUsecase = mycontent_base.NewAttachment(
-		content_chraft.NewStorageClient(ctx, "artifactd_archive"),
+		content_chraft.NewStorageClient(ctx, "artifactd__archive"),
 		2,
 		buildArtifactBlob,
 		false,

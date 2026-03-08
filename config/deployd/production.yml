@@ -16,7 +16,7 @@ storage:
       bucket_name: artifactd-beta
       base_public_url: https://mb1:9000/artifactd-beta
   clickhouse:
-    content:
+    replica:
       address: "clickhouse-darurat:9000"
       username: <secret>
       password: <secret>
