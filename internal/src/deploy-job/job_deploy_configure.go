@@ -186,6 +186,10 @@ func (a *configureHost) Execute() error {
 			fmt.Fprintln(f, env)
 		}
 
+		// TODO: move all overwrite here instead of systemd service definition
+		fmt.Fprintf(f, "%s=%v\n", "DEPLOYD_HOST", a.host.Host)
+		fmt.Fprintf(f, "%s=%v\n", "DEPLOYD_HOST_REPLICA_ID", a.host.RaftConfig.ReplicaID)
+
 		return nil
 	}()
 	if err != nil {
