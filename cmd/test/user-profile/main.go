@@ -23,7 +23,7 @@ func main() {
 	router := httprouter.New()
 
 	router.GET("/", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		fmt.Fprint(w, "Latest! In place edit in github 🌴✅🌞\n")
+		fmt.Fprint(w, "Latest! 💕💕💕💝🥰❤️❤️🌴🌴🌴🧨😘\n")
 		key := "MESSAGE"
 		fmt.Fprintf(w, "Env read: %v = %v.\n", key, os.Getenv(key))
 		fmt.Fprintf(w, "Env read: %v = %v.\n", "DEPLOYD_SERVICE_BUILD_COMMIT_ID", os.Getenv("DEPLOYD_SERVICE_BUILD_COMMIT_ID"))
