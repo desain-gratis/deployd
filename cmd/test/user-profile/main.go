@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
+	"time"
 
 	mycontentapi "github.com/desain-gratis/common/delivery/mycontent-api"
 	mycontent_base "github.com/desain-gratis/common/delivery/mycontent-api/mycontent/base"
@@ -77,5 +79,15 @@ func main() {
 
 	log.Info().Msgf("Baruu. User profile service is running at http://0.0.0.0:10001")
 
-	server.ListenAndServe()
+	go server.ListenAndServe()
+
+	sigint := make(chan os.Signal, 1)
+	signal.Notify(sigint, os.Interrupt)
+	log.Info().Msgf("WAITING FOR SIGINT :)")
+	<-sigint
+	ctxt, cancelt := context.WithTimeout(ctx, 30*time.Second)
+	defer cancelt()
+	_ = server.Shutdown(ctxt)
+
+	raftr.Close()
 }
