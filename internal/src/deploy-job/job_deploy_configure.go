@@ -165,12 +165,12 @@ func (a *configureHost) Execute() error {
 
 		buildData, err := a.dependencies.BuildUsecase.Get(
 			ctx,
-			a.Job.Request.Service.Ns,
+			a.Job.Request.Ns,
 			[]string{a.Job.Request.Service.Repository.ID},
 			fmt.Sprintf("%v", a.Job.Request.BuildVersion), // attachment can have one to many, so we're restricting to one
 		)
 		if err != nil {
-			return fmt.Errorf("error while getting build artifact: %w", err)
+			return fmt.Errorf("error while getting build usecase: %w", err)
 		}
 		build := buildData[0]
 
