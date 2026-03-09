@@ -88,6 +88,8 @@ func main() {
 	ctxt, cancelt := context.WithTimeout(ctx, 30*time.Second)
 	defer cancelt()
 	_ = server.Shutdown(ctxt)
-
+	log.Info().Msgf("Closing raft..")
 	raftr.Close()
+	log.Info().Msgf("Raft cosed..")
+	log.Info().Msgf("Bye bye")
 }
