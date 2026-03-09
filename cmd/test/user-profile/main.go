@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	mycontentapi "github.com/desain-gratis/common/delivery/mycontent-api"
@@ -82,8 +83,8 @@ func main() {
 	go server.ListenAndServe()
 
 	sigint := make(chan os.Signal, 1)
-	signal.Notify(sigint, os.Interrupt)
-	log.Info().Msgf("WAITING FOR SIGINT :)")
+	signal.Notify(sigint, os.Interrupt, syscall.SIGTERM)
+	log.Info().Msgf("Server is running.")
 	<-sigint
 	ctxt, cancelt := context.WithTimeout(ctx, 30*time.Second)
 	defer cancelt()

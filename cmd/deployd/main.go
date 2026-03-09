@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/julienschmidt/httprouter"
@@ -134,8 +135,8 @@ func main() {
 	go startRouter(ctx, wg, router, config.GetString("http.public.address"))
 
 	sigint := make(chan os.Signal, 1)
-	signal.Notify(sigint, os.Interrupt)
-	log.Info().Msgf("WAITING FOR SIGINT :)")
+	signal.Notify(sigint, os.Interrupt, syscall.SIGTERM)
+	log.Info().Msgf("Server is running.")
 	<-sigint
 	cancel(errors.New("server closed"))
 	wg.Wait()
