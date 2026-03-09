@@ -576,17 +576,15 @@ func (m *raftApp) getRaftServiceConfig(previousJob *entity.DeploymentJob, target
 }
 
 func (m *raftApp) getRaftShardsConfig(previousJob *entity.DeploymentJob, target []entity.Host, request entity.SubmitDeploymentJobRequest) (map[uint64]entity.RaftShardConfig, error) {
-	if previousJob != nil {
-		// TODO: we can do merging later, in case we want to add new replica (or remove one, if possible)
-		return previousJob.RaftConfig.Shards, nil
-	}
-
 	bootstrapHost, err := getLeaderByTarget(target)
 	if err != nil {
 		return nil, err
 	}
 
 	replica := make(map[uint64]entity.RaftShardConfig)
+
+	// TODO: detect changes with previous job
+
 	for shardID, req := range request.RaftShard {
 		replica[req.ShardID] = entity.RaftShardConfig{
 			BootstrapHost: bootstrapHost.Host, // server overwrite
