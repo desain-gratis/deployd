@@ -139,6 +139,8 @@ func main() {
 	<-sigint
 	cancel(errors.New("server closed"))
 	wg.Wait()
+	log.Info().Msgf("Closing raft")
+	raftr.Close()
 	log.Info().Msgf("Bye bye")
 }
 
