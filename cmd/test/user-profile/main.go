@@ -89,7 +89,7 @@ func main() {
 		greetings, err := helloClient.GetGreeting(ctx)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "error")
+			fmt.Fprintf(w, "error: %v", err)
 			return
 		}
 		fmt.Fprintf(w, "success: %v", greetings)
