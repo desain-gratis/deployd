@@ -2,6 +2,7 @@ package hello
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/desain-gratis/common/lib/raft/runner"
@@ -59,16 +60,31 @@ func (c *Client) GetGreeting(ctx context.Context) (string, error) {
 	// }
 
 	// Try sync propose base
-	ctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
-	defer cancel()
-	raftRes, err := c.rc.DHost.SyncPropose(ctx, c.session, []byte(`{"msg":"get-greetings:hello"}`))
+	// ctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	// defer cancel()
+	// raftRes, err := c.rc.DHost.SyncPropose(ctx, c.session, []byte(`{"msg":"get-greetings:hello"}`))
+	// if err != nil {
+	// 	return "", err
+	// }
+	// raftResult := raftRes.Data
+
+	// ctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
+	// defer cancel()
+	reqState, err := c.rc.DHost.Propose(c.session, []byte(`{"msg":"get-greetings:hello"}`), 1*time.Minute)
 	if err != nil {
 		return "", err
 	}
-	raftResult := raftRes.Data
+
+	notify := <-reqState.ResultC()
+	if notify.Committed() {
+		return fmt.Sprintf("success %+v", notify), nil
+	}
+	return fmt.Sprintf("async %v", notify), nil
+
+	// raftResult := raftRes.Data
 
 	// Try (async) propose base, try also with commited
 	// c.rc.DHost.Propose(c.session, "get-greetings:hello", 1*time.Minute)
 
-	return string(raftResult), nil
+	// return string(raftResult), nil
 }
