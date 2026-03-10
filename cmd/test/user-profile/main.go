@@ -13,6 +13,7 @@ import (
 	mycontent_base "github.com/desain-gratis/common/delivery/mycontent-api/mycontent/base"
 	content_chraft "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/clickhouse-raft"
 	raftr "github.com/desain-gratis/common/lib/raft/runner"
+	"github.com/desain-gratis/deployd/internal/src/raft-app/hello"
 	"github.com/desain-gratis/deployd/src/deployd"
 	"github.com/julienschmidt/httprouter"
 	"github.com/rs/zerolog/log"
@@ -72,6 +73,27 @@ func main() {
 	router.POST("/profile", userProfileHandler.Post)
 	router.GET("/profile", userProfileHandler.Get)
 	router.DELETE("/profile", userProfileHandler.Delete)
+
+	ctxHello, err := raftr.RunReplica[any](
+		ctx,
+		"hello-world-v1",
+		hello.New(),
+	)
+	if err != nil {
+		log.Panic().Msgf("failed to run secretd raft: %v", err)
+	}
+
+	helloClient := hello.NewClient(ctxHello)
+
+	router.POST("/hello", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		greetings, err := helloClient.GetGreeting(ctx)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "error")
+			return
+		}
+		fmt.Fprintf(w, "success: %v", greetings)
+	})
 
 	server := &http.Server{
 		Addr:    "0.0.0.0:10001",
