@@ -3,7 +3,10 @@ package deployjob
 import (
 	"context"
 
+	"github.com/desain-gratis/common/lib/raft/runner"
 	raft_runner "github.com/desain-gratis/common/lib/raft/runner"
+	"github.com/rs/zerolog/log"
+
 	"github.com/desain-gratis/deployd/src/entity"
 )
 
@@ -29,9 +32,15 @@ type Client struct {
 	*raft_runner.Client
 }
 
-func NewClient(raftClient *raft_runner.Client) *Client {
+func NewClient(ctx context.Context) *Client {
+	// client for "worker" / "local integration" to communicate with Raft app
+	rClient, err := runner.NewClient(ctx)
+	if err != nil {
+		log.Fatal().Msgf("err: %v", err)
+	}
+
 	return &Client{
-		Client: raftClient,
+		Client: rClient,
 	}
 }
 

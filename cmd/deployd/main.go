@@ -231,12 +231,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 		[]string{"service"},
 	)
 
-	// client for "worker" / "local integration" to communicate with Raft app
-	rClient, err := raftr.NewClient(ctx)
-	if err != nil {
-		log.Fatal().Msgf("err: %v", err)
-	}
-	raftDeployjobUsecase = deployjob.NewClient(rClient)
+	raftDeployjobUsecase = deployjob.NewClient(ctx)
 
 	integration := deployjobintegration.New(
 		ctx,
