@@ -61,7 +61,7 @@ func (c *Client) GetGreeting(ctx context.Context) (string, error) {
 	// Try sync propose base
 	ctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
 	defer cancel()
-	raftRes, err := c.rc.DHost.SyncPropose(ctx, c.session, []byte("get-greetings:hello"))
+	raftRes, err := c.rc.DHost.SyncPropose(ctx, c.session, []byte(`{"msg":"get-greetings:hello"}`))
 	if err != nil {
 		return "", err
 	}
