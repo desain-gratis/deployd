@@ -75,11 +75,16 @@ func (c *Client) GetGreeting(ctx context.Context) (string, error) {
 		return "", err
 	}
 
+	// notify := <-reqState.ResultC()
+	// if notify.Committed() {
+	// 	return fmt.Sprintf("success %+v", notify), nil
+	// }
+
+	// return fmt.Sprintf("async %v", notify), nil
+
 	notify := <-reqState.ResultC()
-	if notify.Committed() {
-		return fmt.Sprintf("success %+v", notify), nil
-	}
-	return fmt.Sprintf("async %v", notify), nil
+	notify = <-reqState.ResultC() // applied
+	return fmt.Sprintf("success %+v", notify), nil
 
 	// raftResult := raftRes.Data
 
