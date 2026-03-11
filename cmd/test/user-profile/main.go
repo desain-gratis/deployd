@@ -104,7 +104,7 @@ func main() {
 		fmt.Fprintf(w, "success: %v", greetings)
 	})
 
-	router.POST("/hello-sync", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	router.POST("/hello-async", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		rc := http.MaxBytesReader(w, r.Body, 1024*1024)
 		payload, err := io.ReadAll(rc)
 		if err != nil {
