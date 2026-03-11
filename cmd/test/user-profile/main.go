@@ -124,6 +124,8 @@ func main() {
 		fmt.Fprintf(w, "success: %v", greetings)
 	})
 
+	router.Handler("GET", "/debug/pprof/*pprof", http.DefaultServeMux)
+
 	server := &http.Server{
 		Addr:    "0.0.0.0:10001",
 		Handler: router,
