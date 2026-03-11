@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -86,7 +87,33 @@ func main() {
 	helloClient := hello.NewClient(ctxHello)
 
 	router.POST("/hello", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		greetings, err := helloClient.GetGreeting(ctx)
+		rc := http.MaxBytesReader(w, r.Body, 1024*1024)
+		payload, err := io.ReadAll(rc)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "error: %v", err)
+			return
+		}
+
+		greetings, err := helloClient.GetGreeting(ctx, payload, true)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "error: %v", err)
+			return
+		}
+		fmt.Fprintf(w, "success: %v", greetings)
+	})
+
+	router.POST("/hello-sync", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		rc := http.MaxBytesReader(w, r.Body, 1024*1024)
+		payload, err := io.ReadAll(rc)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintf(w, "error: %v", err)
+			return
+		}
+
+		greetings, err := helloClient.GetGreeting(ctx, payload, false)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			fmt.Fprintf(w, "error: %v", err)

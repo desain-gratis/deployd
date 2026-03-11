@@ -52,7 +52,7 @@ func NewClient(ctx context.Context) *Client {
 	}
 }
 
-func (c *Client) GetGreeting(ctx context.Context) (string, error) {
+func (c *Client) GetGreeting(ctx context.Context, payload []byte, applied bool) (string, error) {
 	// raftResult, value, err := c.Publish(ctx, "get-greetings", "hello")
 	// if err != nil {
 	// 	_ = value // can parse error based on value
@@ -70,7 +70,7 @@ func (c *Client) GetGreeting(ctx context.Context) (string, error) {
 
 	// ctx, cancel := context.WithTimeout(ctx, 1*time.Minute)
 	// defer cancel()
-	reqState, err := c.rc.DHost.Propose(c.session, []byte(`{"msg":"get-greetings:hello"}`), 1*time.Minute)
+	reqState, err := c.rc.DHost.Propose(c.session, payload, 1*time.Minute)
 	if err != nil {
 		return "", err
 	}
@@ -83,13 +83,12 @@ func (c *Client) GetGreeting(ctx context.Context) (string, error) {
 	// return fmt.Sprintf("async %v", notify), nil
 
 	notify := <-reqState.ResultC()
+	if !applied {
+		return fmt.Sprintf("success %+v", notify), nil
+	}
 	notify = <-reqState.ResultC() // applied
-	return fmt.Sprintf("success %+v", notify), nil
 
-	// raftResult := raftRes.Data
+	raftResult := notify.GetResult().Data
+	return string(raftResult), nil
 
-	// Try (async) propose base, try also with commited
-	// c.rc.DHost.Propose(c.session, "get-greetings:hello", 1*time.Minute)
-
-	// return string(raftResult), nil
 }
