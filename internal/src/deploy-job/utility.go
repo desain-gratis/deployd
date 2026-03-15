@@ -22,18 +22,14 @@ After=network.target
 [Service]
 Type=simple
 EnvironmentFile=-/etc/%s/env/overwrite.env
-Environment=DEPLOYD_SECRET=/etc/%s/secret/secret.yaml
-Environment=DEPLOYD_RAFT=/etc/%s/raft/dragonboat.yaml
-Environment=DEPLOYD_SERVICE_NAMESPACE=%v
-Environment=DEPLOYD_SERVICE=%s
+WorkingDirectory=/opt/%s/current/
 ExecStart=/opt/%s/current/%s
 Restart=always
 RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
-`, description, pair, pair, pair, namespace, service,
-		pair, executablePath)
+`, description, pair, pair, pair, executablePath)
 }
 
 // ChatGPTMaxxing

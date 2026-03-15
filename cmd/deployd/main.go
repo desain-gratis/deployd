@@ -224,11 +224,11 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 
 	// store only the latest successful deployment job
 	lastSuccessfulJobStore := content_chraft.NewStorageClient(ctx, deployjob.TableDeploymentSuccess)
-	lastSuccessfulJobUsecase = mycontent_base.New[*entity.DeploymentJob](lastSuccessfulJobStore, 1)
+	lastSuccessfulJobUsecase = mycontent_base.New[*entity.DeploymentJob](lastSuccessfulJobStore, 0)
 	lastSuccessfulJobHandler := mycontentapi.New(
 		lastSuccessfulJobUsecase,
 		publicBaseURL+"/deployd/job",
-		[]string{"service"},
+		nil,
 	)
 
 	raftDeployjobUsecase = deployjob.NewClient(ctx)
