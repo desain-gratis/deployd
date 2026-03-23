@@ -81,7 +81,7 @@ func (h *httpHandler) SubmitJob(w http.ResponseWriter, r *http.Request, p httpro
 
 	// overwrite host data with latest data from host config to snapshot;
 	// maybe use optimistic lock in the request (later)
-	allHosts, err := h.dependencies.HostConfigUsecase.Get(ctx, dj.Ns, nil, "")
+	allHosts, err := h.dependencies.HostConfigUsecase.Get(ctx, "deployd", nil, "") // host name are hardcoded
 	if err != nil {
 		fmt.Fprintf(w, `{"error": "error during getting current hosts: %v"}`, err) // TODO: more appropriate
 		return
