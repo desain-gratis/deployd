@@ -170,7 +170,12 @@ func (a *configureHost) Execute() error {
 			fmt.Sprintf("%v", a.Job.Request.BuildVersion), // attachment can have one to many, so we're restricting to one
 		)
 		if err != nil {
-			return fmt.Errorf("error while getting build usecase: %w", err)
+			return fmt.Errorf("error while getting build usecase for ns=%v repository id=%v build version=%v : %w",
+				a.Job.Request.Ns,
+				a.Job.Request.Service.Repository.ID,
+				a.Job.Request.BuildVersion,
+				err,
+			)
 		}
 		build := buildData[0]
 
@@ -326,14 +331,21 @@ func (a *configureHost) Execute() error {
 		}
 		defer f.Close()
 
+		osarch := fmt.Sprintf("%s/%s", a.host.OS, a.host.Architecture)
 		buildArtifact, meta, err := a.dependencies.BuildArtifactUsecase.GetAttachment(
 			ctx,
 			a.Job.Request.Ns,
-			[]string{a.Job.Request.Service.Id, buildId},
-			fmt.Sprintf("%s/%s", a.host.OS, a.host.Architecture), // attachment can have one to many, so we're restricting to one
+			[]string{a.Job.Request.Service.Repository.ID, buildId},
+			osarch, // attachment can have one to many, so we're restricting to one
 		)
 		if err != nil {
-			return fmt.Errorf("error while getting build artifact: %w", err)
+			return fmt.Errorf("error while getting build artifact attachment: for ns=%v service id=%v build id=%v os/arch=%v : %w",
+				a.Job.Request.Ns,
+				a.Job.Request.Service.Repository.ID,
+				buildId,
+				osarch,
+				err,
+			)
 		}
 		defer buildArtifact.Close()
 
