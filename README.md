@@ -88,23 +88,33 @@ At a minimum, configure the location of the application configuration file:
 
 ```bash
 CONFIG=/etc/deployd/config.yaml
+SECRET=/etc/deployd/secret.yaml
+DEPLOYD_RAFT=/etc/deployd/raft.yaml
 ```
 
 You can also add any additional environment variables required by your deployment:
 
 ```bash
 CONFIG=/etc/deployd/config.yaml
+SECRET=/etc/deployd/secret.yaml
+DEPLOYD_RAFT=/etc/deployd/raft.yaml
 PORT=8080
 # OTHER_ENV=value
 ```
 
 The environment file is optional, but specifying `CONFIG` is the recommended way to tell `deployd` where to find its configuration.
 
-Next, create the configuration file:
+Next, create the configuration and secret file:
 
 ```text
 /etc/deployd/config.yaml
+/etc/deployd/secret.yaml
+/etc/deployd/raft.yaml
 ```
+
+
+
+The value of the config can be seen inside the config/ folder 
 
 This keeps executable files under `/opt/deployd` and configuration under `/etc/deployd`, following the standard Linux Filesystem Hierarchy (FHS).
 
