@@ -2,22 +2,201 @@
 
 deploy golang service as ubuntu systemd service
 
-Test deploy
+# Installation
 
-// TODO: node selection at first job deployment; and then save the selection for subsequent deploy
-// save the target deployment host (odd number; 3 or 5)
-// determince which is the "leader" (for raft aware app ofcourse)
+This guide describes how to manually install **deployd** as a systemd service.
 
-// mutable accross many deployment (eg. shared state each deployment job); for job manager; one service -> one service "stateinstance"; 
-// the one that can be modified by user is "service definition"; the one we're talking is the "service instance" with 1 to 1 relationship.
+## Requirements
 
-// app can propose (eg. to publish raft nodehost port), via job manager of course
+* Linux x86_64 (amd64)
+* systemd
+* Root or sudo access
 
-// Job manager also can have this storage:
- - host - available port mapping;
- - service -> port used mapping;
+## Directory Layout
 
-// Job manager may also use this for healthcheck etc.
+Deployd is installed under:
 
-// submit UI scratch done; next we can try this library https://github.com/samber/slog-multi?tab=readme-ov-file
-to fan out log output to both stdout and notifier 
+```text
+/opt/deployd/current/
+```
+
+Environment files are stored in:
+
+```text
+/etc/deployd/env/
+```
+
+The service definition is:
+
+```text
+/etc/systemd/system/deployd.service
+```
+
+---
+
+## 1. Download the Release
+
+Download the latest release from GitHub.
+
+```bash
+wget https://github.com/<owner>/<repo>/releases/latest/download/deployd-linux-amd64.tar.gz
+```
+
+---
+
+## 2. Create Directories
+
+```bash
+sudo mkdir -p /opt/deployd/current
+sudo mkdir -p /etc/deployd/env
+```
+
+---
+
+## 3. Extract the Archive
+
+Extract the release into the deployment directory.
+
+```bash
+sudo tar -xzf deployd-linux-amd64.tar.gz -C /opt/deployd/current
+```
+
+The resulting layout should look like:
+
+```text
+/opt/deployd/current/
+└── deployd
+```
+
+Make the executable runnable:
+
+```bash
+sudo chmod +x /opt/deployd/current/deployd
+```
+
+---
+
+## 4. Create Environment File
+
+Create:
+
+```text
+/etc/deployd/env/overwrite.env
+```
+
+Example:
+
+```bash
+# Example configuration
+PORT=8080
+
+# Add additional configuration here
+```
+
+The environment file is optional. Missing files are ignored.
+
+---
+
+## 5. Create the systemd Service
+
+Create:
+
+```text
+/etc/systemd/system/deployd.service
+```
+
+Contents:
+
+```ini
+[Unit]
+Description=Deployd
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/deployd/env/overwrite.env
+WorkingDirectory=/opt/deployd/current/
+ExecStart=/opt/deployd/current/deployd
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+```
+
+---
+
+## 6. Enable the Service
+
+Reload systemd:
+
+```bash
+sudo systemctl daemon-reload
+```
+
+Enable deployd to start automatically:
+
+```bash
+sudo systemctl enable deployd
+```
+
+Start it:
+
+```bash
+sudo systemctl start deployd
+```
+
+---
+
+## 7. Verify Installation
+
+Check service status:
+
+```bash
+sudo systemctl status deployd
+```
+
+Follow logs:
+
+```bash
+sudo journalctl -u deployd -f
+```
+
+---
+
+## Updating Deployd
+
+1. Stop the service.
+
+```bash
+sudo systemctl stop deployd
+```
+
+2. Replace the binary.
+
+```bash
+sudo tar -xzf deployd-linux-amd64.tar.gz -C /opt/deployd/current
+sudo chmod +x /opt/deployd/current/deployd
+```
+
+3. Restart.
+
+```bash
+sudo systemctl restart deployd
+```
+
+---
+
+## Directory Summary
+
+```text
+/opt/deployd/current/
+    deployd
+
+/etc/deployd/
+    env/
+        overwrite.env
+
+/etc/systemd/system/
+    deployd.service
+```
