@@ -76,7 +76,7 @@ sudo chmod +x /opt/deployd/current/deployd
 
 ---
 
-## 4. Create Environment File
+## 4. Create the Environment File
 
 Create:
 
@@ -84,16 +84,29 @@ Create:
 /etc/deployd/env/overwrite.env
 ```
 
-Example:
+At a minimum, configure the location of the application configuration file:
 
 ```bash
-# Example configuration
-PORT=8080
-
-# Add additional configuration here
+CONFIG=/etc/deployd/config.yaml
 ```
 
-The environment file is optional. Missing files are ignored.
+You can also add any additional environment variables required by your deployment:
+
+```bash
+CONFIG=/etc/deployd/config.yaml
+PORT=8080
+# OTHER_ENV=value
+```
+
+The environment file is optional, but specifying `CONFIG` is the recommended way to tell `deployd` where to find its configuration.
+
+Next, create the configuration file:
+
+```text
+/etc/deployd/config.yaml
+```
+
+This keeps executable files under `/opt/deployd` and configuration under `/etc/deployd`, following the standard Linux Filesystem Hierarchy (FHS).
 
 ---
 
