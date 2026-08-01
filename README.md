@@ -39,7 +39,7 @@ The service definition is:
 Download the latest release from GitHub.
 
 ```bash
-wget https://github.com/<owner>/<repo>/releases/latest/download/deployd-linux-amd64.tar.gz
+wget https://github.com/desain-gratis/deployd/releases/latest/download/deployd-linux-amd64.tar.gz
 ```
 
 ---
@@ -76,7 +76,7 @@ sudo chmod +x /opt/deployd/deployd
 
 ---
 
-## 4. Create the Environment File
+## 4. Create the Config & Environment File
 
 
 ```bash
