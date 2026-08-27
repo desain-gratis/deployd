@@ -30,7 +30,7 @@ func (c *Routing) CreatedTime() time.Time {
 }
 
 func (c *Routing) ID() string {
-	return c.Version
+	return c.Service
 }
 
 func (c *Routing) Namespace() string {
@@ -38,7 +38,7 @@ func (c *Routing) Namespace() string {
 }
 
 func (c *Routing) RefIDs() []string {
-	return []string{c.Service}
+	return nil
 }
 
 func (c *Routing) URL() string {
@@ -55,7 +55,7 @@ func (c *Routing) WithCreatedTime(t time.Time) mycontent.Data {
 }
 
 func (c *Routing) WithID(id string) mycontent.Data {
-	c.Version = id
+	c.Service = id
 	return c
 }
 

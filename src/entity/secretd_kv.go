@@ -41,7 +41,7 @@ func (a *KV) CreatedTime() time.Time {
 }
 
 func (a *KV) ID() string {
-	return a.Version
+	return a.Service
 }
 
 func (a *KV) Namespace() string {
@@ -49,7 +49,7 @@ func (a *KV) Namespace() string {
 }
 
 func (a *KV) RefIDs() []string {
-	return []string{a.Service}
+	return nil
 }
 
 func (a *KV) URL() string {
@@ -68,7 +68,7 @@ func (a *KV) WithCreatedTime(t time.Time) mycontent.Data {
 }
 
 func (a *KV) WithID(id string) mycontent.Data {
-	a.Version = id
+	a.Service = id
 	return a
 }
 

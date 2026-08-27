@@ -28,6 +28,8 @@ func main() {
 		log.Err(err).Msgf("failed to initialize starting data in deployd: %v", err)
 	}
 
+	return
+
 	// tagsStr := strings.Join(tags, ",")
 	data := []*entity.BuildArtifact{{
 		Id:           "", // important to left this one empty
@@ -39,10 +41,10 @@ func main() {
 		Data:         json.RawMessage(`{"source": "script"}`),
 		PublishedAt:  time.Now(),
 		Source:       "deployd-script",
-		RepositoryID: "user-profile",
+		RepositoryID: "raft-chess",
 		OsArch:       []string{"linux/amd64"}, // hardcode first
 		URLx:         "",
-		Name:         "user-profile",
+		Name:         "raft-chess",
 		Archive: []*common_entity.File{
 			{Id: "linux/amd64", Url: "user-profile.tar.gz"},
 		},
@@ -82,9 +84,9 @@ func initWithTestData(
 
 	serviceDefinitionUsecase := mycontentapiclient.New[*entity.ServiceDefinition](http.DefaultClient, host+"/deployd/service", nil, "")
 	repositoryUsecase := mycontentapiclient.New[*entity.Repository](http.DefaultClient, host+"/artifactd/repository", nil, "")
-	envUsecase := mycontentapiclient.New[*entity.Env](http.DefaultClient, host+"/secretd/env", []string{"service"}, "")
-	secretUsecase := mycontentapiclient.New[*entity.Secret](http.DefaultClient, host+"/secretd/secret", []string{"service"}, "")
-	cloudflareConfigUsecase := mycontentapiclient.New[*entity.Routing](http.DefaultClient, host+"/secretd/routing", []string{"service"}, "")
+	envUsecase := mycontentapiclient.New[*entity.Env](http.DefaultClient, host+"/secretd/env", nil, "")
+	secretUsecase := mycontentapiclient.New[*entity.Secret](http.DefaultClient, host+"/secretd/secret", nil, "")
+	cloudflareConfigUsecase := mycontentapiclient.New[*entity.Routing](http.DefaultClient, host+"/secretd/routing", nil, "")
 
 	// init with one service (a "user-profile" simple app)
 	_, err = serviceDefinitionUsecase.Post(ctx, &entity.ServiceDefinition{
@@ -110,10 +112,64 @@ func initWithTestData(
 	// init with one repository (a "user-profile" simple app)
 	_, err = repositoryUsecase.Post(ctx, &entity.Repository{
 		Ns:          "deployd",
-		Id:          "user-profile",
-		Name:        "DG User Profile Repository",
-		Source:      "https://github.com/desain-gratis/common",
+		Id:          "raft-chess",
+		Name:        "Raft chess",
+		Source:      "https://github.com/desain-gratis/raft-chess",
 		URLx:        "",
+		PublishedAt: time.Now(),
+	}, nil)
+	if err != nil {
+		return err
+	}
+
+	// init with one repository (a "user-profile" simple app)
+	_, err = repositoryUsecase.Post(ctx, &entity.Repository{
+		Ns:          "sewatenan",
+		Id:          "sewatenan-api",
+		Name:        "Sewatenan API",
+		Source:      "https://github.com/sewatenan/lease-service",
+		URLx:        "",
+		PublishedAt: time.Now(),
+	}, nil)
+	if err != nil {
+		return err
+	}
+
+	// init with one service (a "user-profile" simple app)
+	_, err = serviceDefinitionUsecase.Post(ctx, &entity.ServiceDefinition{
+		Ns:   "sewatenan",
+		Id:   "sewatenan-api",
+		Name: "Sewatenan API",
+		Repository: entity.ArtifactdRepository{
+			URL: "",
+			Ns:  "sewatenan",
+			ID:  "sewatenan-api",
+		},
+		Description:    "Sewatenan API",
+		ExecutablePath: "./lease-service",
+		BoundAddresses: []entity.BoundAddress{
+			{Host: "localhost", Port: 10001},
+		},
+		PublishedAt: time.Now(),
+	}, nil)
+	if err != nil {
+		return err
+	}
+
+	_, err = serviceDefinitionUsecase.Post(ctx, &entity.ServiceDefinition{
+		Ns:   "sewatenan",
+		Id:   "public-api",
+		Name: "Sewatenan Public API",
+		Repository: entity.ArtifactdRepository{
+			URL: "",
+			Ns:  "sewatenan",
+			ID:  "sewatenan-api", // the same binary
+		},
+		Description:    "Sewatenan API",
+		ExecutablePath: "./public-api",
+		BoundAddresses: []entity.BoundAddress{
+			{Host: "localhost", Port: 9999},
+		},
 		PublishedAt: time.Now(),
 	}, nil)
 	if err != nil {

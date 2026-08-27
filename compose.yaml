@@ -15,6 +15,7 @@ services:
     volumes:
       - ./config/deployd:/etc/deployd
       - ./config/deployd/raft/config-1.yaml:/etc/dragonboat.yaml
+      - ./config/deployd/raft/raft-0.yaml:/etc/etcd-raft.yaml
       - ./www:/var/www
       - ./tmp1/data/data-1:/data
       - ./tmp1/dbus:/dbus
@@ -45,6 +46,7 @@ services:
     volumes:
       - ./config/deployd:/etc/deployd
       - ./config/deployd/raft/config-2.yaml:/etc/dragonboat.yaml
+      - ./config/deployd/raft/raft-1.yaml:/etc/etcd-raft.yaml
       - ./www:/var/www
       - ./tmp2/data/data-2:/data
       - ./tmp2/dbus:/dbus
@@ -75,6 +77,7 @@ services:
     volumes:
       - ./config/deployd:/etc/deployd
       - ./config/deployd/raft/config-3.yaml:/etc/dragonboat.yaml
+      - ./config/deployd/raft/raft-2.yaml:/etc/etcd-raft.yaml
       - ./www:/var/www
       - ./tmp3/data/data-3:/data
       - ./tmp3/dbus:/dbus

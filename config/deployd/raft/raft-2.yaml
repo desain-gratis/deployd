@@ -1,0 +1,8 @@
+deployd:
+  id: 3
+  cluster:
+    - http://deployd1:21521
+    - http://deployd2:21522
+    - http://deployd3:21523
+  bind_address: localhost:21523
+  join: false

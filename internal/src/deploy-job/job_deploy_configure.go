@@ -225,6 +225,7 @@ func (a *configureHost) Execute() error {
 	}
 
 	err = func() error {
+		// TODOOOOOOOOO: versioned  HOW TO GET
 		secretData, err := a.dependencies.SecretUsecase.Get(ctx, a.Job.Request.Ns, []string{a.Job.Request.Service.Id}, strconv.FormatUint(a.Job.Request.SecretVersion, 10))
 		if err != nil {
 			return fmt.Errorf("error while downloading env %w", err)
