@@ -60,3 +60,7 @@ func (a *UserProfile) WithURL(url string) mycontent.Data {
 	a.Url = url
 	return a
 }
+
+func (a *UserProfile) WithVersion(ver uint64) mycontent.Data {
+	return a
+}

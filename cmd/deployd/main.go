@@ -215,7 +215,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 
 	// "ordinary" mycontent
 	jobStore := content_chraft.NewStorageClient(ctx, deployjob.TableDeploymentJob) // convention
-	jobUsecase = mycontent_base.New[*entity.DeploymentJob](jobStore, 1)
+	jobUsecase = mycontent_base.New[*entity.DeploymentJob](jobStore)
 	jobHandler := mycontentapi.New(
 		jobUsecase,
 		publicBaseURL+"/deployd/job",
@@ -224,7 +224,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 
 	// store only the latest successful deployment job
 	lastSuccessfulJobStore := content_chraft.NewStorageClient(ctx, deployjob.TableDeploymentSuccess)
-	lastSuccessfulJobUsecase = mycontent_base.New[*entity.DeploymentJob](lastSuccessfulJobStore, 0)
+	lastSuccessfulJobUsecase = mycontent_base.New[*entity.DeploymentJob](lastSuccessfulJobStore)
 	lastSuccessfulJobHandler := mycontentapi.New(
 		lastSuccessfulJobUsecase,
 		publicBaseURL+"/deployd/job",
@@ -322,7 +322,7 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
 	}
 
 	secretStore := content_chraft.NewStorageClient(ctx, "secretd__secret")
-	secretUsecase = mycontent_base.New[*entity.Secret](secretStore, 1)
+	secretUsecase = mycontent_base.New[*entity.Secret](secretStore)
 	secretHandler := mycontentapi.New(
 		secretUsecase,
 		publicBaseURL+"/secretd/secret",
@@ -330,7 +330,7 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
 	)
 
 	envStore := content_chraft.NewStorageClient(ctx, "secretd__env")
-	envUsecase = mycontent_base.New[*entity.Env](envStore, 1)
+	envUsecase = mycontent_base.New[*entity.Env](envStore)
 	envHandler := mycontentapi.New(
 		envUsecase,
 		publicBaseURL+"/secretd/env",
@@ -347,7 +347,7 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router) {
 	router.DELETE("/secretd/env", envHandler.Delete)
 
 	routingStore := content_chraft.NewStorageClient(ctx, "secretd__routing")
-	routingUsecase = mycontent_base.New[*entity.Routing](routingStore, 1)
+	routingUsecase = mycontent_base.New[*entity.Routing](routingStore)
 	routingHandler := mycontentapi.New(
 		routingUsecase,
 		publicBaseURL+"/secretd/routing",
@@ -376,7 +376,7 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 
 	// config storage
 	hostConfigStore := content_chraft.NewStorageClient(ctx, "deployd__host")
-	hostConfigUsecase = mycontent_base.New[*entity.Host](hostConfigStore, 0)
+	hostConfigUsecase = mycontent_base.New[*entity.Host](hostConfigStore)
 	hostConfigHandler := mycontentapi.New(
 		hostConfigUsecase,
 		publicBaseURL+"/deployd/host",
@@ -384,7 +384,7 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router) {
 	)
 
 	serviceDefinitionStorage := content_chraft.NewStorageClient(ctx, "deployd__service")
-	serviceDefinitionUsecase = mycontent_base.New[*entity.ServiceDefinition](serviceDefinitionStorage, 0)
+	serviceDefinitionUsecase = mycontent_base.New[*entity.ServiceDefinition](serviceDefinitionStorage)
 	serviceDefinitionHandler := mycontentapi.New(
 		serviceDefinitionUsecase,
 		publicBaseURL+"/deployd/service",
@@ -467,7 +467,7 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router) {
 	}
 
 	repositoryStorage := content_chraft.NewStorageClient(ctx, "artifactd__repository")
-	repositoryUsecase = mycontent_base.New[*entity.Repository](repositoryStorage, 0)
+	repositoryUsecase = mycontent_base.New[*entity.Repository](repositoryStorage)
 
 	repositoryHandler := mycontentapi.New(
 		repositoryUsecase,
@@ -476,7 +476,7 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router) {
 	)
 
 	buildStorage := content_chraft.NewStorageClient(ctx, "artifactd__build")
-	buildUsecase = mycontent_base.New[*entity.BuildArtifact](buildStorage, 1)
+	buildUsecase = mycontent_base.New[*entity.BuildArtifact](buildStorage)
 
 	buildHandler := mycontentapi.New(
 		buildUsecase,
@@ -486,7 +486,6 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router) {
 
 	buildArtifactUsecase = mycontent_base.NewAttachment(
 		content_chraft.NewStorageClient(ctx, "artifactd__archive"),
-		2,
 		buildArtifactBlob,
 		false,
 		"artifactd/archive",

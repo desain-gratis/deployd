@@ -71,8 +71,8 @@ func New(topic notifier.Topic) *raftApp {
 	}
 
 	// data accessor inside raft
-	jobUsecase := mycontent_base.New[*entity.DeploymentJob](jobStorage, 1)
-	successfulJobUsecase := mycontent_base.New[*entity.DeploymentJobByService](serviceInstanceStorage, 0)
+	jobUsecase := mycontent_base.New[*entity.DeploymentJob](jobStorage)
+	successfulJobUsecase := mycontent_base.New[*entity.DeploymentJobByService](serviceInstanceStorage)
 
 	// cache is important because we don't rely on DB for get-and-set operation (expect stale data, trade off with high write)
 	jobCache := expirable.NewLRU[jobKey, *entity.DeploymentJob](256, nil, 20*time.Minute) // at least until the DB can catch up

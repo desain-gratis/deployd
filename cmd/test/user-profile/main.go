@@ -66,7 +66,7 @@ func main() {
 	}
 
 	userProfileStore := content_chraft.NewStorageClient(ctx, "user_profile")
-	userProfileUsecase := mycontent_base.New[*UserProfile](userProfileStore, 0)
+	userProfileUsecase := mycontent_base.New[*UserProfile](userProfileStore)
 	userProfileHandler := mycontentapi.New(
 		userProfileUsecase,
 		"/profile",
