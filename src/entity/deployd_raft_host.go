@@ -84,3 +84,7 @@ func (a *RaftHost) WithURL(url string) mycontent.Data {
 	a.URLx = url
 	return a
 }
+
+func (a *RaftHost) WithVersion(ver uint64) mycontent.Data {
+	return a
+}

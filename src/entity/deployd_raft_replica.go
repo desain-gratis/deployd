@@ -75,3 +75,7 @@ func (a *RaftReplica) WithURL(url string) mycontent.Data {
 	a.URLx = url
 	return a
 }
+
+func (a *RaftReplica) WithVersion(ver uint64) mycontent.Data {
+	return a
+}

@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/desain-gratis/common/delivery/mycontent-api/mycontent"
@@ -66,4 +67,9 @@ func (c *Routing) WithNamespace(ns string) mycontent.Data {
 func (c *Routing) WithURL(url string) mycontent.Data {
 	c.URLx = url
 	return c
+}
+
+func (a *Routing) WithVersion(ver uint64) mycontent.Data {
+	a.Version = strconv.FormatUint(ver, 10)
+	return a
 }

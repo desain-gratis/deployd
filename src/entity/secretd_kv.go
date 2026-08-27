@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/desain-gratis/common/delivery/mycontent-api/mycontent"
@@ -78,5 +79,10 @@ func (a *KV) WithNamespace(ns string) mycontent.Data {
 
 func (a *KV) WithURL(url string) mycontent.Data {
 	a.URLx = url
+	return a
+}
+
+func (a *KV) WithVersion(ver uint64) mycontent.Data {
+	a.Version = strconv.FormatUint(ver, 10)
 	return a
 }

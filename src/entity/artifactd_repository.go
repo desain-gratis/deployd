@@ -62,3 +62,7 @@ func (r *Repository) WithURL(url string) mycontent.Data {
 	r.URLx = url
 	return r
 }
+
+func (r *Repository) WithVersion(ver uint64) mycontent.Data {
+	return r
+}

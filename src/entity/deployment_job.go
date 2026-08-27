@@ -176,3 +176,7 @@ func (d *DeploymentJob) WithURL(url string) mycontent.Data {
 	d.Url = url
 	return d
 }
+
+func (d *DeploymentJob) WithVersion(ver uint64) mycontent.Data {
+	return d
+}

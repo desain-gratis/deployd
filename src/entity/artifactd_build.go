@@ -8,7 +8,7 @@ import (
 	"github.com/desain-gratis/common/types/entity"
 )
 
-var _ mycontent.VersionedData = &BuildArtifact{}
+var _ mycontent.Data = &BuildArtifact{}
 
 // TODO: we can make another entity that extend this, to get "BuildArtifactByBranch" ; todo: in dg
 type BuildArtifact struct {
@@ -72,6 +72,6 @@ func (a *BuildArtifact) WithURL(url string) mycontent.Data {
 	return a
 }
 
-func (a *BuildArtifact) WithEventID(id uint64) mycontent.VersionedData {
+func (a *BuildArtifact) WithVersion(ver uint64) mycontent.Data {
 	return a
 }
