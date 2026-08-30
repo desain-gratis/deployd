@@ -72,3 +72,7 @@ func (a *Host) WithURL(url string) mycontent.Data {
 func (a *Host) WithVersion(ver uint64) mycontent.Data {
 	return a
 }
+
+func (a *Host) DGVersion() *uint64 {
+	return nil
+}

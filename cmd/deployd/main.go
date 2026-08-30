@@ -21,11 +21,13 @@ import (
 	mycontent_base "github.com/desain-gratis/common/delivery/mycontent-api/mycontent/base"
 	blob_s3 "github.com/desain-gratis/common/delivery/mycontent-api/storage/blob/s3"
 	content_badgerraft "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/badger-raft"
+
 	content_chraft "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/clickhouse-raft"
 	"github.com/desain-gratis/common/lib/notifier"
 	notifier_api "github.com/desain-gratis/common/lib/notifier/api"
 	notifier_impl "github.com/desain-gratis/common/lib/notifier/impl"
-	raftr "github.com/desain-gratis/common/lib/raft/runner"
+
+	// raftr "github.com/desain-gratis/common/lib/raft/runner"
 	runneretcd "github.com/desain-gratis/common/lib/raft/runner-etcd"
 	deployjobintegration "github.com/desain-gratis/deployd/internal/src/deploy-job"
 	deployjob "github.com/desain-gratis/deployd/internal/src/raft-app/deploy-job"
@@ -52,7 +54,7 @@ var (
 	// archive / artifact repository storing build & archive information
 	repositoryUsecase *mycontent_base.Handler[*entity.Repository]
 
-	buildUsecase *mycontent_base.Handler[*entity.BuildArtifact]
+	buildUsecase *mycontent_base.VersionedHandler[*entity.BuildArtifact]
 
 	// store service's env
 	envUsecase *mycontent_base.Handler[*entity.Env]
@@ -63,8 +65,7 @@ var (
 	// store service's routing
 	routingUsecase *mycontent_base.Handler[*entity.Routing]
 
-	jobUsecase               *mycontent_base.Handler[*entity.DeploymentJob]
-	lastSuccessfulJobUsecase *mycontent_base.Handler[*entity.DeploymentJob]
+	jobUsecase *mycontent_base.VersionedHandler[*entity.DeploymentJob] // todo view only versioned
 
 	buildArtifactUsecase *mycontent_base.HandlerWithAttachment
 
@@ -104,10 +105,10 @@ func main() {
 	// All event regarding job lifecycle will be published to this topic
 	deploydTopic = notifier_impl.NewStandardTopic()
 
-	err = raftr.InitWithConfigFile(os.Getenv("DEPLOYD_RAFT"))
-	if err != nil {
-		log.Panic().Msgf("failed to init raft: %v", err)
-	}
+	// err = raftr.InitWithConfigFile(os.Getenv("DEPLOYD_RAFT"))
+	// if err != nil {
+	// 	log.Panic().Msgf("failed to init raft: %v", err)
+	// }
 
 	// test in memory first
 	opts := badger.DefaultOptions("").WithInMemory(true)
@@ -137,13 +138,22 @@ func main() {
 		content_badgerraft.TableConfig{Name: "secretd__routing", RefSize: 0, Versioned: true, VersionedGetLimit: 5},
 	)
 
+	//
+	// jobStorageApp := content_badgerraft.New(
+	// 	db,
+	// 	// artifactd module
+	// 	content_badgerraft.TableConfig{Name: "artifactd__repository", RefSize: 0},
+	// 	content_badgerraft.TableConfig{Name: "artifactd__build", RefSize: 0, Versioned: true},
+	// 	content_badgerraft.TableConfig{Name: "artifactd__archive", RefSize: 2},
+	// )
+
 	// todo: refactor raftr API
-	raftr.WithClickhouseStorage(
-		config.GetString("storage.clickhouse.replica.address"),
-		config.GetString("storage.clickhouse.replica.username"),
-		config.GetString("storage.clickhouse.replica.password"),
-		fmt.Sprintf("deployd-%v", currentHost.RaftConfig.ReplicaID),
-	)
+	// raftr.WithClickhouseStorage(
+	// 	config.GetString("storage.clickhouse.replica.address"),
+	// 	config.GetString("storage.clickhouse.replica.username"),
+	// 	config.GetString("storage.clickhouse.replica.password"),
+	// 	fmt.Sprintf("deployd-%v", currentHost.RaftConfig.ReplicaID),
+	// )
 
 	wg := new(sync.WaitGroup)
 	router := httprouter.New()
@@ -153,12 +163,17 @@ func main() {
 	if err != nil {
 		log.Fatal().Msgf("err init raft: %v", err)
 	}
-
+	// This is all the place to store configuration (mycontent maxxing)
 	// enableSystemdModule(ctx, router)
 	enableArtifactdModule(ctx, router, badgerStorageApp)
 	enableDeploydModule(ctx, router, badgerStorageApp)
 	enableSecretdModule(ctx, router, badgerStorageApp)
-	enableJobModule(ctx, router, badgerStorageApp)
+
+	// This is our replicated raft state-machine app for deployment job.
+	// It can also exposes mycontent datastore for easy access (read only).
+	// All write command are managed by the application
+	enableJobModule(ctx, router)
+
 	enableUI(ctx, router)
 
 	err = initHostInformation(ctx)
@@ -177,7 +192,7 @@ func main() {
 	cancel(errors.New("server closed"))
 	wg.Wait()
 	log.Info().Msgf("Closing raft")
-	raftr.Close()
+	// raftr.Close()
 	log.Info().Msgf("Bye bye")
 }
 
@@ -214,7 +229,7 @@ func enableSystemdModule(ctx context.Context, router *httprouter.Router) {
 	router.GET("/ws", httpIntegration.StreamUnit)
 }
 
-func enableJobModule(ctx context.Context, router *httprouter.Router, raftStorage *content_badgerraft.BadgerRaftApp) {
+func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	subscription, err := deploydTopic.Subscribe(ctx, notifier_impl.NewStandardSubscriber(nil))
 	if err != nil {
 		log.Fatal().Msgf("failed to run subscribe to a topic:  %v", err)
@@ -240,27 +255,25 @@ func enableJobModule(ctx context.Context, router *httprouter.Router, raftStorage
 		}
 	}()
 
-	ctx, err = raftr.RunReplica[any](
-		ctx,
-		"deploy-job-v1",
-		deployjob.New(deploydTopic),
-	)
+	jobApp := deployjob.New(deploydTopic)
+
+	ctx, _, err = runneretcd.RunWithConfig("/etc/etcd-raft.yaml", "job", jobApp)
 	if err != nil {
-		log.Fatal().Msgf("failed to run deploy-job-v1 raft: %v", err)
+		log.Fatal().Msgf("err init raft: %v", err)
 	}
 
 	// "ordinary" mycontent
-	jobStore := content_chraft.NewStorageClient(ctx, deployjob.TableDeploymentJob) // convention
-	jobUsecase = mycontent_base.New[*entity.DeploymentJob](jobStore)
+	// notice we don't need repo, because it's managed inside the job state machine app, we only get the read only version
+	jobUsecase = jobApp.GetJobStore()
 	jobHandler := mycontentapi.New(
 		jobUsecase,
 		publicBaseURL+"/deployd/job",
-		[]string{"service"},
+		nil,
 	)
 
 	// store only the latest successful deployment job
-	lastSuccessfulJobStore := content_chraft.NewStorageClient(ctx, deployjob.TableDeploymentSuccess)
-	lastSuccessfulJobUsecase = mycontent_base.New[*entity.DeploymentJob](lastSuccessfulJobStore)
+	// not used anywhere other than this
+	lastSuccessfulJobUsecase := jobApp.GetSuccessfulJobStore()
 	lastSuccessfulJobHandler := mycontentapi.New(
 		lastSuccessfulJobUsecase,
 		publicBaseURL+"/deployd/job",
@@ -309,6 +322,8 @@ func enableJobModule(ctx context.Context, router *httprouter.Router, raftStorage
 		"http://localhost:*", "http://localhost",
 		"http://mb1:*", "http://mb2:*", "http://mb3:*",
 		"http://mb1", "http://mb2", "http://mb3",
+		"http://hz1:*", "http://hz2:*", "http://hz3:*",
+		"http://hz1", "http://hz2", "http://hz3",
 	}
 
 	// job read; non-websocket version
@@ -344,19 +359,19 @@ func enableJobModule(ctx context.Context, router *httprouter.Router, raftStorage
 }
 
 func enableSecretdModule(ctx context.Context, router *httprouter.Router, raftStorage *content_badgerraft.BadgerRaftApp) {
-	ctx, err := raftr.RunReplica[any](
-		ctx,
-		"secretd-v1",
-		content_chraft.New(
-			// TODO: i've changed because the entity is changed. refsize 0 / refsize get automatically from the type ..?
-			content_chraft.TableConfig{Name: "secretd__secret", RefSize: 0, Versioned: true, VersionedGetLimit: 5},
-			content_chraft.TableConfig{Name: "secretd__env", RefSize: 0, Versioned: true, VersionedGetLimit: 5},
-			content_chraft.TableConfig{Name: "secretd__routing", RefSize: 0, Versioned: true, VersionedGetLimit: 5},
-		),
-	)
-	if err != nil {
-		log.Panic().Msgf("failed to run secretd raft: %v", err)
-	}
+	// ctx, err := raftr.RunReplica[any](
+	// 	ctx,
+	// 	"secretd-v1",
+	// 	content_chraft.New(
+	// 		// TODO: i've changed because the entity is changed. refsize 0 / refsize get automatically from the type ..?
+	// 		content_chraft.TableConfig{Name: "secretd__secret", RefSize: 0, Versioned: true, VersionedGetLimit: 5},
+	// 		content_chraft.TableConfig{Name: "secretd__env", RefSize: 0, Versioned: true, VersionedGetLimit: 5},
+	// 		content_chraft.TableConfig{Name: "secretd__routing", RefSize: 0, Versioned: true, VersionedGetLimit: 5},
+	// 	),
+	// )
+	// if err != nil {
+	// 	log.Panic().Msgf("failed to run secretd raft: %v", err)
+	// }
 
 	// secretStore := content_chraft.NewStorageClient(ctx, "secretd__secret")
 	secretStore, err := raftStorage.GetContentRepository(ctx, "secretd__secret")
@@ -412,19 +427,19 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router, raftSto
 }
 
 func enableDeploydModule(ctx context.Context, router *httprouter.Router, raftStorage *content_badgerraft.BadgerRaftApp) {
-	ctx, err := raftr.RunReplica[any](
-		ctx,
-		"deployd-v1",
-		content_chraft.New(
-			content_chraft.TableConfig{Name: "deployd__host", RefSize: 0},
-			content_chraft.TableConfig{Name: "deployd__service", RefSize: 0},
-			content_chraft.TableConfig{Name: "deployd__raft_host", RefSize: 1},
-			content_chraft.TableConfig{Name: "deployd__raft_replica", RefSize: 1},
-		),
-	)
-	if err != nil {
-		log.Panic().Msgf("failed to run deployd raft: %v", err)
-	}
+	// ctx, err := raftr.RunReplica[any](
+	// 	ctx,
+	// 	"deployd-v1",
+	// 	content_chraft.New(
+	// 		content_chraft.TableConfig{Name: "deployd__host", RefSize: 0},
+	// 		content_chraft.TableConfig{Name: "deployd__service", RefSize: 0},
+	// 		content_chraft.TableConfig{Name: "deployd__raft_host", RefSize: 1},
+	// 		content_chraft.TableConfig{Name: "deployd__raft_replica", RefSize: 1},
+	// 	),
+	// )
+	// if err != nil {
+	// 	log.Panic().Msgf("failed to run deployd raft: %v", err)
+	// }
 
 	// config storage
 	// hostConfigStore := content_chraft.NewStorageClient(ctx, "deployd__host")
@@ -453,17 +468,27 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router, raftSto
 		nil,
 	)
 
+	raftHostStore, err := raftStorage.GetContentRepository(ctx, "deployd__raft_host")
+	if err != nil {
+		log.Fatal().Msgf("%v", err)
+	}
+
 	raftHostHandler := mycontentapi.NewFromStorage[*entity.RaftHost](
 		publicBaseURL+"/deployd/raft/host",
 		[]string{"service"},
-		content_chraft.NewStorageClient(ctx, "deployd__raft_host"),
+		raftHostStore,
 		1,
 	)
+
+	raftReplicaStore, err := raftStorage.GetContentRepository(ctx, "deployd__raft_replica")
+	if err != nil {
+		log.Fatal().Msgf("%v", err)
+	}
 
 	raftReplicaHandler := mycontentapi.NewFromStorage[*entity.RaftReplica](
 		publicBaseURL+"/deployd/raft/replica",
 		[]string{"service"},
-		content_chraft.NewStorageClient(ctx, "deployd__raft_replica"),
+		raftReplicaStore,
 		1,
 	)
 
@@ -503,18 +528,18 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router, raftSto
 func enableArtifactdModule(ctx context.Context, router *httprouter.Router, raftStorage *content_badgerraft.BadgerRaftApp) {
 	// TODO: separate between config / CRUD with the incrementalID so we can reset the DB more easily
 	// TODO: we can use commit ID purely on the archive, need to modify the gh-action to use bare archive client (instead of Builder)
-	ctx, err := raftr.RunReplica[any](
-		ctx,
-		"artifactd-v1",
-		content_chraft.New(
-			content_chraft.TableConfig{Name: "artifactd__repository", RefSize: 0},
-			content_chraft.TableConfig{Name: "artifactd__build", RefSize: 1, Versioned: true},
-			content_chraft.TableConfig{Name: "artifactd__archive", RefSize: 2},
-		),
-	)
-	if err != nil {
-		log.Panic().Msgf("failed to run artifactd raft: %v", err)
-	}
+	// ctx, err := raftr.RunReplica[any](
+	// 	ctx,
+	// 	"artifactd-v1",
+	// 	content_chraft.New(
+	// 		content_chraft.TableConfig{Name: "artifactd__repository", RefSize: 0},
+	// 		content_chraft.TableConfig{Name: "artifactd__build", RefSize: 0, Versioned: true},
+	// 		content_chraft.TableConfig{Name: "artifactd__archive", RefSize: 2},
+	// 	),
+	// )
+	// if err != nil {
+	// 	log.Panic().Msgf("failed to run artifactd raft: %v", err)
+	// }
 
 	buildArtifactBlob, err := blob_s3.New(
 		config.GetString("storage.s3.blob.endpoint"),
@@ -541,17 +566,28 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router, raftS
 		nil,
 	)
 
-	buildStorage := content_chraft.NewStorageClient(ctx, "artifactd__build")
-	buildUsecase = mycontent_base.New[*entity.BuildArtifact](buildStorage)
+	// buildStorage := content_chraft.NewStorageClient(ctx, "artifactd__build")
+	// an auto increment repo
+	buildStorage, err := raftStorage.GetVersionedContentRepository(ctx, "artifactd__build")
+	if err != nil {
+		log.Fatal().Msgf("%v", err)
+	}
+
+	buildUsecase = mycontent_base.NewVersioned[*entity.BuildArtifact](buildStorage)
 
 	buildHandler := mycontentapi.New(
 		buildUsecase,
 		publicBaseURL+"/artifactd/build",
-		[]string{"repository"},
+		nil,
 	)
 
+	archiveStorage, err := raftStorage.GetContentRepository(ctx, "artifactd__archive")
+	if err != nil {
+		log.Fatal().Msgf("%v", err)
+	}
+
 	buildArtifactUsecase = mycontent_base.NewAttachment(
-		content_chraft.NewStorageClient(ctx, "artifactd__archive"),
+		archiveStorage,
 		buildArtifactBlob,
 		false,
 		"artifactd/archive",
@@ -559,7 +595,7 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router, raftS
 	archiveHandler := mycontentapi.NewAttachment(
 		buildArtifactUsecase,
 		publicBaseURL+"/artifactd/archive",
-		[]string{"repository", "build"},
+		[]string{"build"},
 		"",
 	)
 

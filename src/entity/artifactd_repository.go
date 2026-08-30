@@ -63,6 +63,10 @@ func (r *Repository) WithURL(url string) mycontent.Data {
 	return r
 }
 
-func (r *Repository) WithVersion(ver uint64) mycontent.Data {
-	return r
+func (a *Repository) WithVersion(ver uint64) mycontent.Data {
+	return a
+}
+
+func (a *Repository) DGVersion() *uint64 {
+	return nil
 }

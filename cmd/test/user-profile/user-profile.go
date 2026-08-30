@@ -64,3 +64,7 @@ func (a *UserProfile) WithURL(url string) mycontent.Data {
 func (a *UserProfile) WithVersion(ver uint64) mycontent.Data {
 	return a
 }
+
+func (a *UserProfile) DGVersion() *uint64 {
+	return nil
+}

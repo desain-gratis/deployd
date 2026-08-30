@@ -1,7 +1,6 @@
 package entity
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/desain-gratis/common/delivery/mycontent-api/mycontent"
@@ -19,7 +18,7 @@ type KV struct {
 	Ns      string `json:"namespace"`
 	Service string `json:"service"`
 
-	Version string `json:"version"`
+	Version uint64 `json:"version"`
 
 	Value map[string]string `json:"value"`
 
@@ -83,6 +82,10 @@ func (a *KV) WithURL(url string) mycontent.Data {
 }
 
 func (a *KV) WithVersion(ver uint64) mycontent.Data {
-	a.Version = strconv.FormatUint(ver, 10)
+	a.Version = ver
 	return a
+}
+
+func (a *KV) DGVersion() *uint64 {
+	return &a.Version
 }

@@ -28,11 +28,11 @@ func main() {
 		log.Err(err).Msgf("failed to initialize starting data in deployd: %v", err)
 	}
 
-	return
+	// return
 
 	// tagsStr := strings.Join(tags, ",")
 	data := []*entity.BuildArtifact{{
-		Id:           "", // important to left this one empty
+		// Id:           "", // important to left this one empty
 		Ns:           "deployd",
 		CommitID:     "heh3h3h3h3",
 		Branch:       "iguana",
@@ -54,7 +54,7 @@ func main() {
 	if err != nil {
 		log.Fatal().Msgf("err: %v", err)
 	}
-	buildSync := contentsync.Builder[*entity.BuildArtifact](u, "repository").
+	buildSync := contentsync.Builder[*entity.BuildArtifact](u).
 		WithNamespace("*").
 		WithData(data)
 

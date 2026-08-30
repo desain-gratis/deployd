@@ -112,3 +112,7 @@ func (a *ServiceDefinition) WithURL(url string) mycontent.Data {
 func (a *ServiceDefinition) WithVersion(ver uint64) mycontent.Data {
 	return a
 }
+
+func (a *ServiceDefinition) DGVersion() *uint64 {
+	return nil
+}

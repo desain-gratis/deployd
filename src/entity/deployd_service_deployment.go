@@ -73,3 +73,7 @@ func (a *ServiceInstanceHost) WithURL(url string) mycontent.Data {
 func (a *ServiceInstanceHost) WithVersion(ver uint64) mycontent.Data {
 	return a
 }
+
+func (a *ServiceInstanceHost) DGVersion() *uint64 {
+	return nil
+}

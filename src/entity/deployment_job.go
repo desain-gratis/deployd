@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/desain-gratis/common/delivery/mycontent-api/mycontent"
@@ -60,7 +61,7 @@ func (d *DeploymentJobByService) RefIDs() []string {
 
 type DeploymentJob struct {
 	Ns string `json:"namespace"`
-	Id string `json:"id"`
+	Id string `json:"id"` // it's a version (auto increment)
 
 	// main status / DAG
 	Status            DeploymentJobStatus `json:"status"`
@@ -137,7 +138,7 @@ func (d *DeploymentJob) CreatedTime() time.Time {
 }
 
 func (d *DeploymentJob) ID() string {
-	return d.Id
+	return d.Request.Service.Id
 }
 
 func (d *DeploymentJob) Namespace() string {
@@ -145,7 +146,7 @@ func (d *DeploymentJob) Namespace() string {
 }
 
 func (d *DeploymentJob) RefIDs() []string {
-	return []string{d.Request.Service.Id}
+	return nil
 }
 
 func (d *DeploymentJob) URL() string {
@@ -163,7 +164,7 @@ func (d *DeploymentJob) WithCreatedTime(t time.Time) mycontent.Data {
 }
 
 func (d *DeploymentJob) WithID(id string) mycontent.Data {
-	d.Id = id
+	d.Request.Service.Id = id
 	return d
 }
 
@@ -177,6 +178,20 @@ func (d *DeploymentJob) WithURL(url string) mycontent.Data {
 	return d
 }
 
+// func (d *DeploymentJob) WithVersion(ver uint64) mycontent.Data {
+// 	d.Id = strconv.FormatUint(ver, 10)
+// 	return d
+// }
+
 func (d *DeploymentJob) WithVersion(ver uint64) mycontent.Data {
+	d.Id = strconv.FormatUint(ver, 10)
 	return d
+}
+
+func (d *DeploymentJob) DGVersion() *uint64 {
+	ver, err := strconv.ParseUint(d.Id, 10, 64)
+	if err != nil {
+		return nil
+	}
+	return &ver
 }

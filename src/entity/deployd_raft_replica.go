@@ -79,3 +79,7 @@ func (a *RaftReplica) WithURL(url string) mycontent.Data {
 func (a *RaftReplica) WithVersion(ver uint64) mycontent.Data {
 	return a
 }
+
+func (a *RaftReplica) DGVersion() *uint64 {
+	return nil
+}
