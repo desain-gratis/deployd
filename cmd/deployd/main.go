@@ -139,23 +139,6 @@ func main() {
 		content_badgerraft.TableConfig{Name: "secretd__routing", RefSize: 1, TableType: content_badgerraft.TableTypeAutoIncrement, VersionedGetLimit: 5},
 	)
 
-	//
-	// jobStorageApp := content_badgerraft.New(
-	// 	db,
-	// 	// artifactd module
-	// 	content_badgerraft.TableConfig{Name: "artifactd__repository", RefSize: 0},
-	// 	content_badgerraft.TableConfig{Name: "artifactd__build", RefSize: 0, Versioned: true},
-	// 	content_badgerraft.TableConfig{Name: "artifactd__archive", RefSize: 2},
-	// )
-
-	// todo: refactor raftr API
-	// raftr.WithClickhouseStorage(
-	// 	config.GetString("storage.clickhouse.replica.address"),
-	// 	config.GetString("storage.clickhouse.replica.username"),
-	// 	config.GetString("storage.clickhouse.replica.password"),
-	// 	fmt.Sprintf("deployd-%v", currentHost.RaftConfig.ReplicaID),
-	// )
-
 	wg := new(sync.WaitGroup)
 	router := httprouter.New()
 
