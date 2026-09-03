@@ -3,11 +3,11 @@
   "service": {
     "id": "user-profile"
   },
-  "build_version": 0,
-  "secret_version": 0,
-  "env_version": 0,
-  "raft_config_version": 0,
-  "raft_config_replica_version": 0,
+  "build_version": 1,
+  "secret_version": 1,
+  "env_version": 1,
+  "raft_config_version": 1,
+  "raft_config_replica_version": 1,
   "target_hosts": [
     {
       "host": "deployd1",

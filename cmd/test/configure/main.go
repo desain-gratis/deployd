@@ -41,7 +41,7 @@ func main() {
 		Data:         json.RawMessage(`{"source": "script"}`),
 		PublishedAt:  time.Now(),
 		Source:       "deployd-script",
-		RepositoryID: "raft-chess",
+		RepositoryID: "user-profile",          // TODO: make naming consistent :)
 		OsArch:       []string{"linux/amd64"}, // hardcode first
 		URLx:         "",
 		Name:         "raft-chess",
