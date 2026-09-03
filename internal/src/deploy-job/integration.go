@@ -33,12 +33,12 @@ type Dependencies struct {
 	// archive / artifact repository storing build & archive information
 	RepositoryUsecase *mycontent_base.Handler[*entity.Repository]
 
+	// these three should be the Versioned
 	// store service's env
 	EnvUsecase *mycontent_base.Handler[*entity.Env]
-
 	// store service's secret
 	SecretUsecase *mycontent_base.Handler[*entity.Secret]
-
+	// routing service
 	RoutingUsecase *mycontent_base.Handler[*entity.Routing]
 
 	BuildUsecase *mycontent_base.Handler[*entity.BuildArtifact]

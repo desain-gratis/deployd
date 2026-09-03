@@ -12,6 +12,7 @@ var _ mycontent.Data = &Routing{}
 type Routing struct {
 	Ns      string `json:"namespace"`
 	Service string `json:"service"`
+	Id      string `json:"id"`
 	Version uint64 `json:"version"`
 
 	CloudflareConfig *CloudflareConfig `json:"cloudflare_config,omitempty"`
@@ -29,7 +30,7 @@ func (c *Routing) CreatedTime() time.Time {
 }
 
 func (c *Routing) ID() string {
-	return c.Service
+	return c.Id
 }
 
 func (c *Routing) Namespace() string {
@@ -37,7 +38,7 @@ func (c *Routing) Namespace() string {
 }
 
 func (c *Routing) RefIDs() []string {
-	return nil
+	return []string{c.Service}
 }
 
 func (c *Routing) URL() string {
@@ -54,7 +55,7 @@ func (c *Routing) WithCreatedTime(t time.Time) mycontent.Data {
 }
 
 func (c *Routing) WithID(id string) mycontent.Data {
-	c.Service = id
+	c.Id = id
 	return c
 }
 

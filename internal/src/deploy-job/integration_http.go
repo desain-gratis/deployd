@@ -136,7 +136,7 @@ func (h *httpHandler) CancelJob(w http.ResponseWriter, r *http.Request, p httpro
 	ctx := r.Context()
 	// check the latest job for this service
 	// we can get the latest as long as the base storage uses "Incremental ID" type
-	jobs, err := h.dependencies.JobUsecase.Get(ctx, ns, []string{service}, jobID)
+	jobs, err := h.dependencies.JobUsecase.Get(ctx, ns, []string{service}, "")
 	if err != nil {
 		fmt.Fprintf(w, `{"error": "failed to get existing job: %v"}`, err) // TODO: more appropriate
 		return

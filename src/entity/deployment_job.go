@@ -1,7 +1,6 @@
 package entity
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/desain-gratis/common/delivery/mycontent-api/mycontent"
@@ -138,7 +137,7 @@ func (d *DeploymentJob) CreatedTime() time.Time {
 }
 
 func (d *DeploymentJob) ID() string {
-	return d.Request.Service.Id
+	return d.Id
 }
 
 func (d *DeploymentJob) Namespace() string {
@@ -146,7 +145,7 @@ func (d *DeploymentJob) Namespace() string {
 }
 
 func (d *DeploymentJob) RefIDs() []string {
-	return nil
+	return []string{d.Request.Service.Id}
 }
 
 func (d *DeploymentJob) URL() string {
@@ -164,7 +163,7 @@ func (d *DeploymentJob) WithCreatedTime(t time.Time) mycontent.Data {
 }
 
 func (d *DeploymentJob) WithID(id string) mycontent.Data {
-	d.Request.Service.Id = id
+	d.Id = id
 	return d
 }
 
@@ -178,20 +177,10 @@ func (d *DeploymentJob) WithURL(url string) mycontent.Data {
 	return d
 }
 
-// func (d *DeploymentJob) WithVersion(ver uint64) mycontent.Data {
-// 	d.Id = strconv.FormatUint(ver, 10)
-// 	return d
-// }
-
 func (d *DeploymentJob) WithVersion(ver uint64) mycontent.Data {
-	d.Id = strconv.FormatUint(ver, 10)
 	return d
 }
 
 func (d *DeploymentJob) DGVersion() *uint64 {
-	ver, err := strconv.ParseUint(d.Id, 10, 64)
-	if err != nil {
-		return nil
-	}
-	return &ver
+	return nil
 }

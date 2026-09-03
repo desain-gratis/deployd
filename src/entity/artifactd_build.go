@@ -2,7 +2,6 @@ package entity
 
 import (
 	"encoding/json"
-	"strconv"
 	"time"
 
 	"github.com/desain-gratis/common/delivery/mycontent-api/mycontent"
@@ -27,7 +26,6 @@ type BuildArtifact struct {
 	URLx         string          `json:"url"`
 	OsArch       []string        `json:"os_arch" ch:"os_arch"`
 	Archive      []*entity.File  `json:"archive"`
-	Version      uint64          `json:"version,omitempty"`
 }
 
 func (a *BuildArtifact) CreatedTime() time.Time {
@@ -35,7 +33,7 @@ func (a *BuildArtifact) CreatedTime() time.Time {
 }
 
 func (a *BuildArtifact) ID() string {
-	return strconv.FormatUint(a.Version, 10)
+	return a.Id
 }
 
 func (a *BuildArtifact) Namespace() string {
@@ -75,11 +73,9 @@ func (a *BuildArtifact) WithURL(url string) mycontent.Data {
 }
 
 func (a *BuildArtifact) WithVersion(ver uint64) mycontent.Data {
-	a.Version = ver
-	a.Id = strconv.FormatUint(a.Version, 10)
 	return a
 }
 
 func (a *BuildArtifact) DGVersion() *uint64 {
-	return &a.Version
+	return nil
 }

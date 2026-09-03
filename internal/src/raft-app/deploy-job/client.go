@@ -2,9 +2,11 @@ package deployjob
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
-	"github.com/desain-gratis/common/lib/raft/runner"
-	raft_runner "github.com/desain-gratis/common/lib/raft/runner"
+	dgraft "github.com/desain-gratis/common/lib/raft"
+	runneretcd "github.com/desain-gratis/common/lib/raft/runner-etcd"
 	"github.com/rs/zerolog/log"
 
 	"github.com/desain-gratis/deployd/src/entity"
@@ -29,26 +31,39 @@ const (
 type CancelJobResponse entity.DeploymentJob
 
 type Client struct {
-	*raft_runner.Client
+	// *raft_runner.Client
+	etcdRaftCtx *runneretcd.RaftContext
 }
 
 func NewClient(ctx context.Context) *Client {
 	// client for "worker" / "local integration" to communicate with Raft app
-	rClient, err := runner.NewClient(ctx)
-	if err != nil {
-		log.Fatal().Msgf("err: %v", err)
+
+	rCtx, ok := dgraft.GetRaftContext(ctx).(*runneretcd.RaftContext)
+	if !ok {
+		log.Fatal().Msgf("not an etcd raft runner")
 	}
 
 	return &Client{
-		Client: rClient,
+		etcdRaftCtx: rCtx,
 	}
 }
 
 func (c *Client) SubmitJob(ctx context.Context, request entity.SubmitDeploymentJobRequest) (SubmitJobResponse, error) {
-	raftResult, value, err := c.Publish(ctx, CommandUserSubmitJob, request)
+	payload, err := json.Marshal(request)
 	if err != nil {
-		_ = value // can parse error based on value
 		return SubmitJobResponse{}, err
+	}
+
+	cmdWrap := CommandWrapper{Name: CommandUserSubmitJob, Value: payload}
+
+	proposeResult, err := c.etcdRaftCtx.Propose(ctx, cmdWrap)
+	if err != nil {
+		return SubmitJobResponse{}, err
+	}
+
+	raftResult, ok := proposeResult.([]byte)
+	if !ok {
+		return SubmitJobResponse{}, fmt.Errorf("unexpeted result type from state machine")
 	}
 
 	result, err := parseAs[SubmitJobResponse](raftResult)
@@ -60,10 +75,21 @@ func (c *Client) SubmitJob(ctx context.Context, request entity.SubmitDeploymentJ
 }
 
 func (c *Client) CancelJob(ctx context.Context, request entity.CancelJobRequest) (CancelJobResponse, error) {
-	raftResult, value, err := c.Publish(ctx, CommandUserCancelJob, request)
+	payload, err := json.Marshal(request)
 	if err != nil {
-		_ = value // can parse error based on value
 		return CancelJobResponse{}, err
+	}
+
+	cmdWrap := CommandWrapper{Name: CommandUserCancelJob, Value: payload}
+
+	proposeResult, err := c.etcdRaftCtx.Propose(ctx, cmdWrap)
+	if err != nil {
+		return CancelJobResponse{}, err
+	}
+
+	raftResult, ok := proposeResult.([]byte)
+	if !ok {
+		return CancelJobResponse{}, fmt.Errorf("unexpeted result type from state machine")
 	}
 
 	result, err := parseAs[CancelJobResponse](raftResult)
@@ -75,10 +101,21 @@ func (c *Client) CancelJob(ctx context.Context, request entity.CancelJobRequest)
 }
 
 func (c *Client) FeedHostConfigurationUpdate(ctx context.Context, request ConfigurationUpdateRequest) (ConfigurationUpdateResponse, error) {
-	raftResult, value, err := c.Publish(ctx, CommandHostConfigurationUpdate, request)
+	payload, err := json.Marshal(request)
 	if err != nil {
-		_ = value
 		return ConfigurationUpdateResponse{}, err
+	}
+
+	cmdWrap := CommandWrapper{Name: CommandHostConfigurationUpdate, Value: payload}
+
+	proposeResult, err := c.etcdRaftCtx.Propose(ctx, cmdWrap)
+	if err != nil {
+		return ConfigurationUpdateResponse{}, err
+	}
+
+	raftResult, ok := proposeResult.([]byte)
+	if !ok {
+		return ConfigurationUpdateResponse{}, fmt.Errorf("unexpeted result type from state machine")
 	}
 
 	result, err := parseAs[ConfigurationUpdateResponse](raftResult)
@@ -90,10 +127,21 @@ func (c *Client) FeedHostConfigurationUpdate(ctx context.Context, request Config
 }
 
 func (c *Client) ConfirmRestartService(ctx context.Context, request RestartConfirmation) (HostRestartConfirmationResponse, error) {
-	raftResult, value, err := c.Publish(ctx, CommandRestartConfirmation, request)
+	payload, err := json.Marshal(request)
 	if err != nil {
-		_ = value
 		return HostRestartConfirmationResponse{}, err
+	}
+
+	cmdWrap := CommandWrapper{Name: CommandRestartConfirmation, Value: payload}
+
+	proposeResult, err := c.etcdRaftCtx.Propose(ctx, cmdWrap)
+	if err != nil {
+		return HostRestartConfirmationResponse{}, err
+	}
+
+	raftResult, ok := proposeResult.([]byte)
+	if !ok {
+		return HostRestartConfirmationResponse{}, fmt.Errorf("unexpeted result type from state machine")
 	}
 
 	result, err := parseAs[HostRestartConfirmationResponse](raftResult)
@@ -105,10 +153,21 @@ func (c *Client) ConfirmRestartService(ctx context.Context, request RestartConfi
 }
 
 func (c *Client) FeedHostRestartServiceUpdate(ctx context.Context, request HostRestartServiceUpdateRequest) (HostRestartServiceUpdateResponse, error) {
-	raftResult, value, err := c.Publish(ctx, CommandHostRestartServiceUpdate, request)
+	payload, err := json.Marshal(request)
 	if err != nil {
-		_ = value
 		return HostRestartServiceUpdateResponse{}, err
+	}
+
+	cmdWrap := CommandWrapper{Name: CommandHostRestartServiceUpdate, Value: payload}
+
+	proposeResult, err := c.etcdRaftCtx.Propose(ctx, cmdWrap)
+	if err != nil {
+		return HostRestartServiceUpdateResponse{}, err
+	}
+
+	raftResult, ok := proposeResult.([]byte)
+	if !ok {
+		return HostRestartServiceUpdateResponse{}, fmt.Errorf("unexpeted result type from state machine")
 	}
 
 	result, err := parseAs[HostRestartServiceUpdateResponse](raftResult)

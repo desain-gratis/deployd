@@ -6,3 +6,11 @@ deployd:
     - http://deployd3:21523
   bind_address: localhost:21523
   join: false
+job:
+  id: 3
+  cluster:
+    - http://deployd1:21531
+    - http://deployd2:21532
+    - http://deployd3:21533
+  bind_address: localhost:21533
+  join: false

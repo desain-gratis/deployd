@@ -167,7 +167,7 @@ func (a *configureHost) Execute() error {
 			ctx,
 			a.Job.Request.Ns,
 			[]string{a.Job.Request.Service.Repository.ID},
-			fmt.Sprintf("%v", a.Job.Request.BuildVersion), // attachment can have one to many, so we're restricting to one
+			strconv.FormatUint(a.Job.Request.BuildVersion, 10), // attachment can have one to many, so we're restricting to one
 		)
 		if err != nil {
 			return fmt.Errorf("error while getting build usecase for ns=%v repository id=%v build version=%v : %w",

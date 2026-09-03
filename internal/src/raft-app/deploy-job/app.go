@@ -9,33 +9,38 @@ import (
 
 	"github.com/desain-gratis/common/delivery/mycontent-api/mycontent"
 	mycontent_base "github.com/desain-gratis/common/delivery/mycontent-api/mycontent/base"
-	content_chraft "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/clickhouse-raft"
+	content_badger "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/badger"
 	"github.com/desain-gratis/common/lib/notifier"
 	"github.com/desain-gratis/common/lib/raft"
+	raft_utility "github.com/desain-gratis/common/lib/raft/utility"
+	"github.com/dgraph-io/badger/v4"
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/rs/zerolog/log"
 
 	"github.com/desain-gratis/deployd/src/entity"
 )
 
+type Command string
+
 const (
 	TableDeploymentJob     = "deploy_job__deployment_job"
 	TableDeploymentSuccess = "deploy_job__deployment_success"
 
-	CommandUserSubmitJob raft.Command = "deployd.user.submit-job"
-	CommandUserCancelJob raft.Command = "deployd.user.cancel-job"
+	CommandUserSubmitJob Command = "deployd.user.submit-job"
+	CommandUserCancelJob Command = "deployd.user.cancel-job"
 
 	// Host update
-	CommandHostConfigurationUpdate raft.Command = "deployd.host.configuration-update"
+	CommandHostConfigurationUpdate Command = "deployd.host.configuration-update"
 
 	// After configured, we wait before immediately continuing
-	CommandRestartConfirmation raft.Command = "deployd.restart-confirmation"
+	CommandRestartConfirmation Command = "deployd.restart-confirmation"
 
 	// Update de
-	CommandHostRestartServiceUpdate raft.Command = "deployd.host.restart-service-update"
+	CommandHostRestartServiceUpdate Command = "deployd.host.restart-service-update"
 )
 
-var _ raft.Application = &raftApp{}
+// var _ raft.Application = &raftApp{}
+var _ raft.ApplicationV2 = (*raftApp)(nil)
 
 // raftApp / coordinator
 //
@@ -44,46 +49,15 @@ var _ raft.Application = &raftApp{}
 // If you have multiple, you can use actual composition instead, and then make sure the Raft App lifecycle
 // is executed for each instance
 type raftApp struct {
-	*content_chraft.ContentApp
-
 	topic notifier.Topic
 
 	jobCache *expirable.LRU[jobKey, *entity.DeploymentJob]
 
 	jobUsecase           *mycontent_base.Handler[*entity.DeploymentJob]
+	jobLatestUsecase     *mycontent_base.Handler[*entity.DeploymentJob]
 	successfulJobUsecase *mycontent_base.Handler[*entity.DeploymentJobByService]
-}
 
-func New(topic notifier.Topic) *raftApp {
-	stateStore := content_chraft.New(
-		content_chraft.TableConfig{Name: TableDeploymentJob, RefSize: 1, Versioned: true, VersionedGetLimit: 10},
-		content_chraft.TableConfig{Name: TableDeploymentSuccess, RefSize: 0},
-	)
-
-	jobStorage, err := stateStore.GetStorage(TableDeploymentJob)
-	if err != nil {
-		log.Fatal().Msgf("err: %v", err)
-	}
-
-	serviceInstanceStorage, err := stateStore.GetStorage(TableDeploymentSuccess)
-	if err != nil {
-		log.Fatal().Msgf("err: %v", err)
-	}
-
-	// data accessor inside raft
-	jobUsecase := mycontent_base.New[*entity.DeploymentJob](jobStorage)
-	successfulJobUsecase := mycontent_base.New[*entity.DeploymentJobByService](serviceInstanceStorage)
-
-	// cache is important because we don't rely on DB for get-and-set operation (expect stale data, trade off with high write)
-	jobCache := expirable.NewLRU[jobKey, *entity.DeploymentJob](256, nil, 20*time.Minute) // at least until the DB can catch up
-
-	return &raftApp{
-		topic:                topic,
-		ContentApp:           stateStore,
-		jobUsecase:           jobUsecase,
-		successfulJobUsecase: successfulJobUsecase,
-		jobCache:             jobCache,
-	}
+	mw *raft_utility.BadgerMetadataWriter
 }
 
 type jobKey struct {
@@ -92,54 +66,203 @@ type jobKey struct {
 	id        string
 }
 
-// make it easier for everyone..
-func (m *raftApp) OnUpdate(ctx context.Context, e raft.Entry) (raft.OnAfterApply, error) {
-	switch e.Command {
-	case CommandUserSubmitJob:
-		// start create job
-		payload, err := parseAs[entity.SubmitDeploymentJobRequest](e.Value)
-		if err != nil {
-			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(e.Value))
-		}
-		return m.userSubmitJob(ctx, payload)
-	case CommandUserCancelJob:
-		// explicitly cancelling job, we cancel
-		payload, err := parseAs[CancelJobRequest](e.Value)
-		if err != nil {
-			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(e.Value))
-		}
-		return m.cancelJob(ctx, payload)
-	case CommandHostConfigurationUpdate:
-		// feed installation (sub)state update to raft
-		payload, err := parseAs[ConfigurationUpdateRequest](e.Value)
-		if err != nil {
-			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(e.Value))
-		}
-		return m.applyHostConfigurationUpdate(ctx, payload)
-	case CommandRestartConfirmation:
-		// if restart is confirmed, we do restart
-		payload, err := parseAs[RestartConfirmation](e.Value)
-		if err != nil {
-			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(e.Value))
-		}
-		return m.restartHostService(ctx, payload)
-	case CommandHostRestartServiceUpdate:
-		// feed deployment update (sub)state update to raft
-		payload, err := parseAs[HostRestartServiceUpdateRequest](e.Value)
-		if err != nil {
-			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(e.Value))
-		}
-		return m.applyHostRestartServiceUpdate(ctx, payload)
+type CommandWrapper struct {
+	Name  Command `json:"name"`
+	Value []byte  `json:"value"`
+}
+
+type ApplyResult func() (any, error)
+
+// TODO: migrate this raft application to V2 maxxxiingg
+
+// ErrRetryable crashes the state machine to preserve state invariant
+var ErrRetryable = errors.New("retryable")
+
+func New(topic notifier.Topic) *raftApp {
+
+	// this app have its own storage, but exposes the mycontent interface via Get.. for external viewing.
+
+	optsJob := badger.DefaultOptions("").WithInMemory(true)
+	dbJob, err := badger.Open(optsJob)
+	if err != nil {
+		log.Fatal().Msgf("UHUY: %v", err)
 	}
 
-	// fallback to the base
-	return m.ContentApp.OnUpdate(ctx, e)
+	jobStorage := content_badger.NewAutoIncrement(dbJob, TableDeploymentJob, 1)
+	jobLatestStorage := jobStorage.GetLatest()
+	serviceInstanceStorage := content_badger.New(dbJob, TableDeploymentSuccess, 0)
+
+	// data accessor inside raft
+	jobUsecase := mycontent_base.New[*entity.DeploymentJob](jobStorage)
+	jobLatestUsecase := mycontent_base.New[*entity.DeploymentJob](jobLatestStorage)
+	successfulJobUsecase := mycontent_base.New[*entity.DeploymentJobByService](serviceInstanceStorage)
+
+	// cache is important because we don't rely on DB for get-and-set operation (expect stale data, trade off with high write)
+	jobCache := expirable.NewLRU[jobKey, *entity.DeploymentJob](256, nil, 20*time.Minute) // at least until the DB can catch up
+
+	return &raftApp{
+		topic:                topic,
+		jobUsecase:           jobUsecase,
+		jobLatestUsecase:     jobLatestUsecase,
+		successfulJobUsecase: successfulJobUsecase,
+		jobCache:             jobCache,
+		mw:                   raft_utility.NewBadgerMetadataWriter(dbJob, "deploy-job-last-applied-index"),
+	}
 }
+
+func (m *raftApp) GetJobStore() *mycontent_base.Handler[*entity.DeploymentJob] {
+	// todo: make view only
+	return m.jobUsecase
+}
+
+func (m *raftApp) GetJobLatestUsecase() *mycontent_base.Handler[*entity.DeploymentJob] {
+	// todo: make view only
+	return m.jobLatestUsecase
+}
+
+func (m *raftApp) GetSuccessfulJobStore() *mycontent_base.Handler[*entity.DeploymentJobByService] {
+	return m.successfulJobUsecase
+}
+
+// todo: improve pattern
+// evaluate and apply
+func (m *raftApp) apply(ctx context.Context, entry raft.EntryV2, result ApplyResult, err error) (any, error) {
+	if errors.Is(err, ErrRetryable) {
+		log.Fatal().Msgf("crashing the state machine: %v", err)
+	}
+
+	errApply := m.mw.Apply(ctx, entry)
+	if errApply != nil {
+		log.Fatal().Msgf("crashing the state machine (meta): %v", err)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	if result == nil {
+		result = func() (any, error) {
+			return "success", nil
+		}
+	}
+
+	// the response we want from user
+	return result()
+}
+
+func (m *raftApp) OnUpdateV2(ctx context.Context, entry raft.EntryV2) (any, error) {
+	cmd, err := parseAs[CommandWrapper](entry.Data)
+	if err != nil {
+		defer m.mw.Apply(ctx, entry) // bad data, ignore
+		return nil, err
+	}
+
+	switch cmd.Name {
+	case CommandUserSubmitJob:
+		// start create job
+		payload, err := parseAs[entity.SubmitDeploymentJobRequest](cmd.Value)
+		if err != nil {
+			defer m.mw.Apply(ctx, entry) // bad data, ignore
+			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(cmd.Value))
+		}
+		result, err := m.userSubmitJob(ctx, payload)
+		return m.apply(ctx, entry, result, err)
+	case CommandUserCancelJob:
+		// explicitly cancelling job, we cancel
+		payload, err := parseAs[CancelJobRequest](cmd.Value)
+		if err != nil {
+			defer m.mw.Apply(ctx, entry) // bad data, ignore
+			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(cmd.Value))
+		}
+		result, err := m.cancelJob(ctx, payload)
+		return m.apply(ctx, entry, result, err)
+	case CommandHostConfigurationUpdate:
+		// feed installation (sub)state update to raft
+		payload, err := parseAs[ConfigurationUpdateRequest](cmd.Value)
+		if err != nil {
+			defer m.mw.Apply(ctx, entry) // bad data, ignore
+			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(cmd.Value))
+		}
+		result, err := m.applyHostConfigurationUpdate(ctx, payload)
+		return m.apply(ctx, entry, result, err)
+	case CommandRestartConfirmation:
+		// if restart is confirmed, we do restart
+		payload, err := parseAs[RestartConfirmation](cmd.Value)
+		if err != nil {
+			defer m.mw.Apply(ctx, entry) // bad data, ignore
+			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(cmd.Value))
+		}
+		result, err := m.restartHostService(ctx, payload)
+		return m.apply(ctx, entry, result, err)
+	case CommandHostRestartServiceUpdate:
+		// feed deployment update (sub)state update to raft
+		payload, err := parseAs[HostRestartServiceUpdateRequest](cmd.Value)
+		if err != nil {
+			defer m.mw.Apply(ctx, entry) // bad data, ignore
+			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(cmd.Value))
+		}
+		result, err := m.applyHostRestartServiceUpdate(ctx, payload)
+		return m.apply(ctx, entry, result, err)
+	default:
+		defer m.mw.Apply(ctx, entry) // bad data, ignore
+		return nil, fmt.Errorf("unknown command: %s", cmd.Name)
+	}
+}
+
+func (m *raftApp) InitV2(ctx context.Context) (uint64, error) {
+	return m.mw.GetLastAppliedIndex(ctx)
+}
+
+// func (m *raftApp) OnUpdate(ctx context.Context, e raft.Entry) (raft.OnAfterApply, error) {
+// 	// make it easier for everyone..
+// 	switch Command(e.Command) {
+// 	case CommandUserSubmitJob:
+// 		// start create job
+// 		payload, err := parseAs[entity.SubmitDeploymentJobRequest](e.Value)
+// 		if err != nil {
+// 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(e.Value))
+// 		}
+// 		return m.userSubmitJob(ctx, payload)
+// 	case CommandUserCancelJob:
+// 		// explicitly cancelling job, we cancel
+// 		payload, err := parseAs[CancelJobRequest](e.Value)
+// 		if err != nil {
+// 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(e.Value))
+// 		}
+// 		return m.cancelJob(ctx, payload)
+// 	case CommandHostConfigurationUpdate:
+// 		// feed installation (sub)state update to raft
+// 		payload, err := parseAs[ConfigurationUpdateRequest](e.Value)
+// 		if err != nil {
+// 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(e.Value))
+// 		}
+// 		return m.applyHostConfigurationUpdate(ctx, payload)
+// 	case CommandRestartConfirmation:
+// 		// if restart is confirmed, we do restart
+// 		payload, err := parseAs[RestartConfirmation](e.Value)
+// 		if err != nil {
+// 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(e.Value))
+// 		}
+// 		return m.restartHostService(ctx, payload)
+// 	case CommandHostRestartServiceUpdate:
+// 		// feed deployment update (sub)state update to raft
+// 		payload, err := parseAs[HostRestartServiceUpdateRequest](e.Value)
+// 		if err != nil {
+// 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(e.Value))
+// 		}
+// 		return m.applyHostRestartServiceUpdate(ctx, payload)
+// 	}
+
+// 	// fallback to the base
+// 	return func() (raft.Result, error) {
+// 		return raft.Result{}, nil
+// 	}, nil
+// }
 
 // Because we're using Golang composition / aka inheritance, we do not need to implement the rest of raft.Application method.
 // Later if we have multiple ContentApp, then you need to implement it to make sure all method are executed.
 
-func (m *raftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploymentJobRequest) (raft.OnAfterApply, error) {
+func (m *raftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploymentJobRequest) (ApplyResult, error) {
 	// TODO: make sure there is no active deployment for the namespace/service pair.
 	var previousJob *entity.DeploymentJob
 	previousSuccessfulDeployment, err := m.successfulJobUsecase.Get(ctx, request.Service.Ns, nil, request.Service.Id)
@@ -206,13 +329,13 @@ func (m *raftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploy
 		return nil, err
 	}
 
-	return func() (raft.Result, error) {
+	return func() (any, error) {
 		m.topic.Broadcast(context.Background(), EventDeploymentJobCreated(resp))
-		return raft.Result{Value: 0, Data: encResult}, nil
+		return encResult, nil
 	}, nil
 }
 
-func (m *raftApp) cancelJob(ctx context.Context, request CancelJobRequest) (raft.OnAfterApply, error) {
+func (m *raftApp) cancelJob(ctx context.Context, request CancelJobRequest) (ApplyResult, error) {
 	previousJob, err := m.getJobByID(ctx, request.Ns, request.Service, request.JobId)
 	if err != nil {
 		return nil, err
@@ -224,7 +347,7 @@ func (m *raftApp) cancelJob(ctx context.Context, request CancelJobRequest) (raft
 		if err != nil {
 			return nil, err
 		}
-		return func() (raft.Result, error) { return raft.Result{Value: 0, Data: encResult}, nil }, nil
+		return func() (any, error) { return raft.Result{Value: 0, Data: encResult}, nil }, nil
 	case entity.DeploymentJobStatusSuccess:
 		return nil, fmt.Errorf("job already finished")
 	}
@@ -241,11 +364,13 @@ func (m *raftApp) cancelJob(ctx context.Context, request CancelJobRequest) (raft
 		return nil, err
 	}
 
-	return func() (raft.Result, error) { return raft.Result{Data: encResult}, nil }, nil
+	return func() (any, error) {
+		return encResult, nil
+	}, nil
 }
 
 // Host configuration update
-func (m *raftApp) applyHostConfigurationUpdate(ctx context.Context, request ConfigurationUpdateRequest) (raft.OnAfterApply, error) {
+func (m *raftApp) applyHostConfigurationUpdate(ctx context.Context, request ConfigurationUpdateRequest) (ApplyResult, error) {
 	job, err := m.getJobByID(ctx, request.Ns, request.Service, request.JobId)
 	if err != nil {
 		return nil, err
@@ -310,7 +435,7 @@ func (m *raftApp) applyHostConfigurationUpdate(ctx context.Context, request Conf
 		return nil, err
 	}
 
-	return func() (raft.Result, error) {
+	return func() (any, error) {
 		// This server is configured..
 		if job.ConfigureHostJob.Status[request.HostName].Status == entity.HostConfigurationStatusSuccess {
 			// it's configured
@@ -329,11 +454,11 @@ func (m *raftApp) applyHostConfigurationUpdate(ctx context.Context, request Conf
 			m.topic.Broadcast(context.Background(), EventDeploymentJobFailed(resp))
 		}
 
-		return raft.Result{Data: encResult}, nil
+		return encResult, nil
 	}, nil
 }
 
-func (m *raftApp) restartHostService(ctx context.Context, request RestartConfirmation) (raft.OnAfterApply, error) {
+func (m *raftApp) restartHostService(ctx context.Context, request RestartConfirmation) (ApplyResult, error) {
 	job, err := m.getJobByID(ctx, request.Ns, request.Service, request.JobId)
 	if err != nil {
 		return nil, err
@@ -375,13 +500,13 @@ func (m *raftApp) restartHostService(ctx context.Context, request RestartConfirm
 
 	// TODO: use logicccc sequential
 
-	return func() (raft.Result, error) {
+	return func() (any, error) {
 		m.topic.Broadcast(ctx, EventRestartConfirmed(resp))
-		return raft.Result{Value: 0, Data: encResult}, nil
+		return encResult, nil
 	}, nil
 }
 
-func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request HostRestartServiceUpdateRequest) (raft.OnAfterApply, error) {
+func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request HostRestartServiceUpdateRequest) (ApplyResult, error) {
 	job, err := m.getJobByID(ctx, request.Ns, request.Service, request.JobId)
 	if err != nil {
 		return nil, err
@@ -424,9 +549,9 @@ func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request Hos
 			return nil, err
 		}
 
-		return func() (raft.Result, error) {
+		return func() (any, error) {
 			m.topic.Broadcast(context.Background(), EventDeploymentJobFailed(resp.CommonResponse))
-			return raft.Result{Data: encResult, Value: 0}, nil
+			return encResult, nil
 		}, nil
 	}
 
@@ -451,9 +576,9 @@ func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request Hos
 			return nil, err
 		}
 
-		return func() (raft.Result, error) {
+		return func() (any, error) {
 			m.topic.Broadcast(context.Background(), EventServiceRestartUpdate(resp))
-			return raft.Result{Data: encResult, Value: 0}, nil
+			return encResult, nil
 		}, nil
 	}
 
@@ -492,12 +617,12 @@ func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request Hos
 			return nil, err
 		}
 
-		return func() (raft.Result, error) {
+		return func() (any, error) {
 			// notify the good news
 			m.topic.Broadcast(context.Background(), EventServiceRestarted(resp))
 			m.topic.Broadcast(context.Background(), EventAllServiceRestarted(resp))
 			m.topic.Broadcast(context.Background(), EventDeploymentJobSuccess(resp.CommonResponse))
-			return raft.Result{Data: encResult, Value: 0}, nil
+			return encResult, nil
 		}, nil
 	}
 
@@ -521,11 +646,11 @@ func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request Hos
 		return nil, err
 	}
 
-	return func() (raft.Result, error) {
+	return func() (any, error) {
 		// This server is configured;
 		m.topic.Broadcast(context.Background(), EventServiceRestarted(resp))
 
-		return raft.Result{Data: encResult}, nil
+		return encResult, nil
 	}, nil
 }
 

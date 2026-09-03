@@ -4,9 +4,6 @@ import (
 	"context"
 
 	"github.com/desain-gratis/common/lib/notifier"
-	"github.com/desain-gratis/common/lib/raft"
-	"github.com/desain-gratis/common/lib/raft/runner"
-	"github.com/rs/zerolog/log"
 
 	deployjob "github.com/desain-gratis/deployd/internal/src/raft-app/deploy-job"
 )
@@ -21,68 +18,16 @@ func (w *eventHandler) StartConsumer(ctx context.Context, topic notifier.Topic, 
 	// only start consuming event after raft is ready
 
 	// wait ready
-	log.Info().Msgf("waiting job replica to be ready")
+	// log.Info().Msgf("waiting job replica to be ready")
 
-	initElu, raftSub, err := runner.WaitReady(ctx)
-	if err != nil {
-		log.Panic().Msgf("not ready")
-	}
-	log.Info().Msgf("replica ready replica id: %v shard id: %v term: %v leader id: %v",
-		initElu.ReplicaID, initElu.ShardID, initElu.Term, initElu.LeaderID)
-
-	// Leader events
-	go func() {
-		isCurrentTermLeader := initElu.LeaderID == initElu.ReplicaID
-		currentTerm := initElu.Term
-
-		var leaderCtx context.Context
-		var cancelFn context.CancelFunc
-
-		cancelFn = func() {} // init with noop
-
-		if isCurrentTermLeader {
-			leaderCtx, cancelFn = context.WithCancel(ctx)
-			w.localWorker.doSomethingAsLeader(leaderCtx)
-		}
-
-		for msg := range raftSub.Listen() {
-			elu, ok := msg.(raft.EventLeaderUpdate)
-			if !ok {
-				continue
-			}
-
-			if elu.Term <= currentTerm {
-				// outdated!
-				continue
-			}
-			currentTerm = elu.Term // update term
-			isNextTermLeader := elu.LeaderID == initElu.ReplicaID
-
-			// No leadership change
-			if isCurrentTermLeader == isNextTermLeader {
-				continue
-			}
-
-			// Stepped down
-			if isCurrentTermLeader {
-				isCurrentTermLeader = false
-				cancelFn() // cancel current leader code
-				continue
-			}
-
-			// Became leader
-			isCurrentTermLeader = true
-			leaderCtx, cancelFn = context.WithCancel(ctx)
-
-			go func(ctx context.Context) {
-				defer cancelFn()
-				w.localWorker.doSomethingAsLeader(ctx)
-			}(leaderCtx)
-		}
-	}()
+	// rCtx, ok := dgraft.GetRaftContext(ctx).(*runneretcd.RaftContext)
+	// if !ok {
+	// 	log.Fatal().Msgf("not an etcd raft runner")
+	// }
 
 	// Local worker
 	go func() {
+		// TODO: need to pass/wrap the raft's index, term, leader as well inside the event from producer (& the cluster ID)
 		for event := range subscription.Listen() {
 			switch value := event.(type) {
 			case deployjob.EventDeploymentJobCreated:

@@ -18,6 +18,7 @@ type KV struct {
 	Ns      string `json:"namespace"`
 	Service string `json:"service"`
 
+	Id      string `json:"id"`
 	Version uint64 `json:"version"`
 
 	Value map[string]string `json:"value"`
@@ -40,7 +41,7 @@ func (a *KV) CreatedTime() time.Time {
 }
 
 func (a *KV) ID() string {
-	return a.Service
+	return a.Id
 }
 
 func (a *KV) Namespace() string {
@@ -48,7 +49,7 @@ func (a *KV) Namespace() string {
 }
 
 func (a *KV) RefIDs() []string {
-	return nil
+	return []string{a.Service}
 }
 
 func (a *KV) URL() string {
@@ -67,7 +68,7 @@ func (a *KV) WithCreatedTime(t time.Time) mycontent.Data {
 }
 
 func (a *KV) WithID(id string) mycontent.Data {
-	a.Service = id
+	a.Id = id
 	return a
 }
 

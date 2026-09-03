@@ -39,7 +39,7 @@ func (c *configureHost) optConfigureRouting() error {
 			return fmt.Errorf("error while downloading cloudflared config %w", err)
 		}
 
-		routingConfig := routingConfigs[0]
+		routingConfig := routingConfigs[0] //[0]
 
 		if routingConfig.CloudflareConfig != nil {
 			log.Info("writing cloudflared config")

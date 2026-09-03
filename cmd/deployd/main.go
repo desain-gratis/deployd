@@ -20,6 +20,7 @@ import (
 	mycontentapi "github.com/desain-gratis/common/delivery/mycontent-api"
 	mycontent_base "github.com/desain-gratis/common/delivery/mycontent-api/mycontent/base"
 	blob_s3 "github.com/desain-gratis/common/delivery/mycontent-api/storage/blob/s3"
+	content_badger "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/badger"
 	content_badgerraft "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/badger-raft"
 
 	content_chraft "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/clickhouse-raft"
@@ -54,7 +55,7 @@ var (
 	// archive / artifact repository storing build & archive information
 	repositoryUsecase *mycontent_base.Handler[*entity.Repository]
 
-	buildUsecase *mycontent_base.VersionedHandler[*entity.BuildArtifact]
+	buildUsecase *mycontent_base.Handler[*entity.BuildArtifact]
 
 	// store service's env
 	envUsecase *mycontent_base.Handler[*entity.Env]
@@ -65,7 +66,7 @@ var (
 	// store service's routing
 	routingUsecase *mycontent_base.Handler[*entity.Routing]
 
-	jobUsecase *mycontent_base.VersionedHandler[*entity.DeploymentJob] // todo view only versioned
+	jobUsecase *mycontent_base.Handler[*entity.DeploymentJob] // todo view only versioned
 
 	buildArtifactUsecase *mycontent_base.HandlerWithAttachment
 
@@ -123,7 +124,7 @@ func main() {
 		db,
 		// artifactd module
 		content_badgerraft.TableConfig{Name: "artifactd__repository", RefSize: 0},
-		content_badgerraft.TableConfig{Name: "artifactd__build", RefSize: 1, Versioned: true},
+		content_badgerraft.TableConfig{Name: "artifactd__build", RefSize: 1, TableType: content_badgerraft.TableTypeAutoIncrement},
 		content_badgerraft.TableConfig{Name: "artifactd__archive", RefSize: 2},
 
 		// deployd module
@@ -133,9 +134,9 @@ func main() {
 		content_badgerraft.TableConfig{Name: "deployd__raft_replica", RefSize: 1},
 
 		// secretd module
-		content_badgerraft.TableConfig{Name: "secretd__secret", RefSize: 0, Versioned: true, VersionedGetLimit: 5},
-		content_badgerraft.TableConfig{Name: "secretd__env", RefSize: 0, Versioned: true, VersionedGetLimit: 5},
-		content_badgerraft.TableConfig{Name: "secretd__routing", RefSize: 0, Versioned: true, VersionedGetLimit: 5},
+		content_badgerraft.TableConfig{Name: "secretd__secret", RefSize: 1, TableType: content_badgerraft.TableTypeAutoIncrement, VersionedGetLimit: 5},
+		content_badgerraft.TableConfig{Name: "secretd__env", RefSize: 1, TableType: content_badgerraft.TableTypeAutoIncrement, VersionedGetLimit: 5},
+		content_badgerraft.TableConfig{Name: "secretd__routing", RefSize: 1, TableType: content_badgerraft.TableTypeAutoIncrement, VersionedGetLimit: 5},
 	)
 
 	//
@@ -268,7 +269,14 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	jobHandler := mycontentapi.New(
 		jobUsecase,
 		publicBaseURL+"/deployd/job",
-		nil,
+		[]string{"service"},
+	)
+
+	jobLatestUsecase := jobApp.GetJobLatestUsecase()
+	jobLatestHandler := mycontentapi.New(
+		jobLatestUsecase,
+		publicBaseURL+"/deployd/job/latest",
+		nil, // service as id
 	)
 
 	// store only the latest successful deployment job
@@ -276,7 +284,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	lastSuccessfulJobUsecase := jobApp.GetSuccessfulJobStore()
 	lastSuccessfulJobHandler := mycontentapi.New(
 		lastSuccessfulJobUsecase,
-		publicBaseURL+"/deployd/job",
+		publicBaseURL+"/deployd/successful-job",
 		nil,
 	)
 
@@ -312,6 +320,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	router.POST("/deployd/job/:service/:id/proceed", integration.Http.ConfirmDeployment)
 
 	router.GET("/deployd/job", jobHandler.Get)
+	router.GET("/deployd/job/latest", jobLatestHandler.Get)
 	router.GET("/deployd/successful-job", lastSuccessfulJobHandler.Get)
 
 	integration.Event.StartConsumer(ctx, deploydTopic, subscription)
@@ -359,22 +368,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 }
 
 func enableSecretdModule(ctx context.Context, router *httprouter.Router, raftStorage *content_badgerraft.BadgerRaftApp) {
-	// ctx, err := raftr.RunReplica[any](
-	// 	ctx,
-	// 	"secretd-v1",
-	// 	content_chraft.New(
-	// 		// TODO: i've changed because the entity is changed. refsize 0 / refsize get automatically from the type ..?
-	// 		content_chraft.TableConfig{Name: "secretd__secret", RefSize: 0, Versioned: true, VersionedGetLimit: 5},
-	// 		content_chraft.TableConfig{Name: "secretd__env", RefSize: 0, Versioned: true, VersionedGetLimit: 5},
-	// 		content_chraft.TableConfig{Name: "secretd__routing", RefSize: 0, Versioned: true, VersionedGetLimit: 5},
-	// 	),
-	// )
-	// if err != nil {
-	// 	log.Panic().Msgf("failed to run secretd raft: %v", err)
-	// }
-
-	// secretStore := content_chraft.NewStorageClient(ctx, "secretd__secret")
-	secretStore, err := raftStorage.GetContentRepository(ctx, "secretd__secret")
+	secretStore, err := raftStorage.GetAutoIncrementTable(ctx, "secretd__secret")
 	if err != nil {
 		log.Fatal().Msgf("%v", err)
 	}
@@ -383,11 +377,10 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router, raftSto
 	secretHandler := mycontentapi.New(
 		secretUsecase,
 		publicBaseURL+"/secretd/secret",
-		nil,
+		[]string{"service"},
 	)
 
-	// envStore := content_chraft.NewStorageClient(ctx, "secretd__env")
-	envStore, err := raftStorage.GetContentRepository(ctx, "secretd__env")
+	envStore, err := raftStorage.GetAutoIncrementTable(ctx, "secretd__env")
 	if err != nil {
 		log.Fatal().Msgf("%v", err)
 	}
@@ -396,11 +389,10 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router, raftSto
 	envHandler := mycontentapi.New(
 		envUsecase,
 		publicBaseURL+"/secretd/env",
-		nil,
+		[]string{"service"},
 	)
 
-	// routingStore := content_chraft.NewStorageClient(ctx, "secretd__routing")
-	routingStore, err := raftStorage.GetContentRepository(ctx, "secretd__routing")
+	routingStore, err := raftStorage.GetAutoIncrementTable(ctx, "secretd__routing")
 	if err != nil {
 		log.Fatal().Msgf("%v", err)
 	}
@@ -409,8 +401,22 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router, raftSto
 	routingHandler := mycontentapi.New(
 		routingUsecase,
 		publicBaseURL+"/secretd/routing",
-		nil,
+		[]string{"service"},
 	)
+
+	// TODO: this works, but can make the API more clean;
+	envLatestStore, ok := envStore.Repository.(*content_badger.AutoIncrementBadgerRepo)
+	if ok {
+		envLatestUsecase := mycontent_base.New[*entity.Env](envLatestStore.GetLatest()) // get the latest version~
+		envLatestHandler := mycontentapi.New(
+			envLatestUsecase,
+			publicBaseURL+"/deployd/env/latest",
+			nil, // service as id
+		)
+		// router.POST("/secretd/env/latest", envLatestHandler.Post)
+		router.GET("/secretd/env/latest", envLatestHandler.Get) // can only get
+		// router.DELETE("/secretd/env/latest", envLatestHandler.Delete)
+	}
 
 	// obviously right now is not secure
 	router.POST("/secretd/secret", secretHandler.Post)
@@ -427,23 +433,8 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router, raftSto
 }
 
 func enableDeploydModule(ctx context.Context, router *httprouter.Router, raftStorage *content_badgerraft.BadgerRaftApp) {
-	// ctx, err := raftr.RunReplica[any](
-	// 	ctx,
-	// 	"deployd-v1",
-	// 	content_chraft.New(
-	// 		content_chraft.TableConfig{Name: "deployd__host", RefSize: 0},
-	// 		content_chraft.TableConfig{Name: "deployd__service", RefSize: 0},
-	// 		content_chraft.TableConfig{Name: "deployd__raft_host", RefSize: 1},
-	// 		content_chraft.TableConfig{Name: "deployd__raft_replica", RefSize: 1},
-	// 	),
-	// )
-	// if err != nil {
-	// 	log.Panic().Msgf("failed to run deployd raft: %v", err)
-	// }
-
 	// config storage
-	// hostConfigStore := content_chraft.NewStorageClient(ctx, "deployd__host")
-	hostConfigStore, err := raftStorage.GetContentRepository(ctx, "deployd__host")
+	hostConfigStore, err := raftStorage.GetKVTable(ctx, "deployd__host")
 	if err != nil {
 		log.Fatal().Msgf("%v", err)
 	}
@@ -455,8 +446,7 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router, raftSto
 		nil,
 	)
 
-	// serviceDefinitionStorage := content_chraft.NewStorageClient(ctx, "deployd__service")
-	serviceDefinitionStorage, err := raftStorage.GetContentRepository(ctx, "deployd__service")
+	serviceDefinitionStorage, err := raftStorage.GetKVTable(ctx, "deployd__service")
 	if err != nil {
 		log.Fatal().Msgf("%v", err)
 	}
@@ -468,7 +458,7 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router, raftSto
 		nil,
 	)
 
-	raftHostStore, err := raftStorage.GetContentRepository(ctx, "deployd__raft_host")
+	raftHostStore, err := raftStorage.GetKVTable(ctx, "deployd__raft_host")
 	if err != nil {
 		log.Fatal().Msgf("%v", err)
 	}
@@ -480,7 +470,7 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router, raftSto
 		1,
 	)
 
-	raftReplicaStore, err := raftStorage.GetContentRepository(ctx, "deployd__raft_replica")
+	raftReplicaStore, err := raftStorage.GetKVTable(ctx, "deployd__raft_replica")
 	if err != nil {
 		log.Fatal().Msgf("%v", err)
 	}
@@ -526,21 +516,6 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router, raftSto
 
 // enableArtifactDienableArtifactdModulescoveryModule enables upload artifact discovery / metadata query
 func enableArtifactdModule(ctx context.Context, router *httprouter.Router, raftStorage *content_badgerraft.BadgerRaftApp) {
-	// TODO: separate between config / CRUD with the incrementalID so we can reset the DB more easily
-	// TODO: we can use commit ID purely on the archive, need to modify the gh-action to use bare archive client (instead of Builder)
-	// ctx, err := raftr.RunReplica[any](
-	// 	ctx,
-	// 	"artifactd-v1",
-	// 	content_chraft.New(
-	// 		content_chraft.TableConfig{Name: "artifactd__repository", RefSize: 0},
-	// 		content_chraft.TableConfig{Name: "artifactd__build", RefSize: 0, Versioned: true},
-	// 		content_chraft.TableConfig{Name: "artifactd__archive", RefSize: 2},
-	// 	),
-	// )
-	// if err != nil {
-	// 	log.Panic().Msgf("failed to run artifactd raft: %v", err)
-	// }
-
 	buildArtifactBlob, err := blob_s3.New(
 		config.GetString("storage.s3.blob.endpoint"),
 		config.GetString("storage.s3.blob.key_id"),
@@ -553,8 +528,7 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router, raftS
 		log.Fatal().Msgf("failure to create blob storage client: %v", err)
 	}
 
-	// repositoryStorage := content_chraft.NewStorageClient(ctx, "artifactd__repository")
-	repositoryStorage, err := raftStorage.GetContentRepository(ctx, "artifactd__repository")
+	repositoryStorage, err := raftStorage.GetKVTable(ctx, "artifactd__repository")
 	if err != nil {
 		log.Fatal().Msgf("%v", err)
 	}
@@ -566,14 +540,14 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router, raftS
 		nil,
 	)
 
-	// buildStorage := content_chraft.NewStorageClient(ctx, "artifactd__build")
 	// an auto increment repo
-	buildStorage, err := raftStorage.GetVersionedContentRepository(ctx, "artifactd__build")
+
+	buildStorage, err := raftStorage.GetAutoIncrementTable(ctx, "artifactd__build")
 	if err != nil {
 		log.Fatal().Msgf("%v", err)
 	}
 
-	buildUsecase = mycontent_base.NewVersioned[*entity.BuildArtifact](buildStorage)
+	buildUsecase = mycontent_base.New[*entity.BuildArtifact](buildStorage)
 
 	buildHandler := mycontentapi.New(
 		buildUsecase,
@@ -581,7 +555,7 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router, raftS
 		nil,
 	)
 
-	archiveStorage, err := raftStorage.GetContentRepository(ctx, "artifactd__archive")
+	archiveStorage, err := raftStorage.GetKVTable(ctx, "artifactd__archive")
 	if err != nil {
 		log.Fatal().Msgf("%v", err)
 	}

@@ -84,9 +84,9 @@ func initWithTestData(
 
 	serviceDefinitionUsecase := mycontentapiclient.New[*entity.ServiceDefinition](http.DefaultClient, host+"/deployd/service", nil, "")
 	repositoryUsecase := mycontentapiclient.New[*entity.Repository](http.DefaultClient, host+"/artifactd/repository", nil, "")
-	envUsecase := mycontentapiclient.New[*entity.Env](http.DefaultClient, host+"/secretd/env", nil, "")
-	secretUsecase := mycontentapiclient.New[*entity.Secret](http.DefaultClient, host+"/secretd/secret", nil, "")
-	cloudflareConfigUsecase := mycontentapiclient.New[*entity.Routing](http.DefaultClient, host+"/secretd/routing", nil, "")
+	envUsecase := mycontentapiclient.New[*entity.Env](http.DefaultClient, host+"/secretd/env", []string{"service"}, "")
+	secretUsecase := mycontentapiclient.New[*entity.Secret](http.DefaultClient, host+"/secretd/secret", []string{"service"}, "")
+	cloudflareConfigUsecase := mycontentapiclient.New[*entity.Routing](http.DefaultClient, host+"/secretd/routing", []string{"service"}, "")
 
 	// init with one service (a "user-profile" simple app)
 	_, err = serviceDefinitionUsecase.Post(ctx, &entity.ServiceDefinition{
