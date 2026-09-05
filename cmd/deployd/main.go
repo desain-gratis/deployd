@@ -118,7 +118,7 @@ func main() {
 
 	db, err := badger.Open(opts)
 	if err != nil {
-		log.Fatal().Msgf("UHUY", err)
+		log.Fatal().Msgf("UHUY %v", err)
 	}
 
 	// A raft application that provides distributed mycontent storage
