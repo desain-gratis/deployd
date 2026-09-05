@@ -10,8 +10,14 @@ var _ mycontent.Data = &Host{}
 
 // Host represents raft host configuration for a particular service
 type Host struct {
-	Ns   string `json:"namespace"`
+	Ns string `json:"namespace"`
+
+	Id uint32 `json:"id"`
+	// Hostname
 	Host string `json:"host"`
+
+	// internal host address for intra cluster-communication
+	InternalAddress string `json:"internal_address"`
 
 	Architecture string `json:"architecture"`
 	OS           string `json:"os"`

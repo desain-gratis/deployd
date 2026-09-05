@@ -82,11 +82,13 @@ func main() {
 	initConfig()
 
 	currentHost = &entity.Host{
-		Ns:           "deployd",
-		Host:         config.GetString("host.name"),
-		OS:           config.GetString("host.os"),
-		Architecture: config.GetString("host.architecture"),
-		FQDN:         config.GetString("http.public.fqdn"),
+		Ns:              "deployd",
+		Host:            config.GetString("host.name"),
+		Id:              config.GetUint32("host.id"),
+		InternalAddress: config.GetString("host.internal_address"), // internal interface
+		OS:              config.GetString("host.os"),
+		Architecture:    config.GetString("host.architecture"),
+		FQDN:            config.GetString("http.public.fqdn"),
 		RaftConfig: entity.RaftHostConfig{
 			ReplicaID:       config.GetUint64("raft.replica_id"),
 			BaseWALDir:      config.GetString("raft.base_wal_dir"),
@@ -112,7 +114,9 @@ func main() {
 	// }
 
 	// test in memory first
-	opts := badger.DefaultOptions("").WithInMemory(true)
+	opts := badger.DefaultOptions(config.GetString("storage.file.app-data"))
+	// opts = opts.WithInMemory(true)
+
 	db, err := badger.Open(opts)
 	if err != nil {
 		log.Fatal().Msgf("UHUY", err)
@@ -281,7 +285,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 				LocalClickhouseConfig: deployjobintegration.LocalClickhouseConfig{
 					Address:  config.GetString("storage.clickhouse.replica.address"),
 					Username: config.GetString("storage.clickhouse.replica.username"),
-					Password: config.GetString("storage.clickhouse.replica.username"),
+					Password: config.GetString("storage.clickhouse.replica.password"),
 				},
 			},
 			HostConfigUsecase:        hostConfigUsecase,
@@ -413,6 +417,7 @@ func enableSecretdModule(ctx context.Context, router *httprouter.Router, raftSto
 	router.POST("/secretd/routing", routingHandler.Post)
 	router.GET("/secretd/routing", routingHandler.Get)
 	router.DELETE("/secretd/routing", routingHandler.Delete)
+
 }
 
 func enableDeploydModule(ctx context.Context, router *httprouter.Router, raftStorage *content_badgerraft.BadgerRaftApp) {
@@ -535,7 +540,7 @@ func enableArtifactdModule(ctx context.Context, router *httprouter.Router, raftS
 	buildHandler := mycontentapi.New(
 		buildUsecase,
 		publicBaseURL+"/artifactd/build",
-		nil,
+		[]string{"repository"},
 	)
 
 	archiveStorage, err := raftStorage.GetKVTable(ctx, "artifactd__archive")

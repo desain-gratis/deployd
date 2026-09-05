@@ -16,6 +16,7 @@ import (
 const (
 	overwriteEnvFile   = "overwrite.env"
 	dragonboatYamlFile = "dragonboat.yaml"
+	etcdRaftYamlFile   = "etcd-raft.yaml"
 	secretYamlFile     = "secret.yaml"
 )
 

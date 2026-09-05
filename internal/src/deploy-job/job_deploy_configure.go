@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -203,7 +204,7 @@ func (a *configureHost) Execute() error {
 		}
 
 		fmt.Fprintf(f, "DEPLOYD_SECRET=/etc/%s_%s/secret/secret.yaml\n", a.Job.Request.Service.Ns, a.Job.Request.Service.Id)
-		fmt.Fprintf(f, "DEPLOYD_RAFT=/etc/%s_%s/raft/dragonboat.yaml\n", a.Job.Request.Service.Ns, a.Job.Request.Service.Id)
+		fmt.Fprintf(f, "DEPLOYD_RAFT=/etc/%s_%s/raft/etcd-raft.yaml\n", a.Job.Request.Service.Ns, a.Job.Request.Service.Id)
 		fmt.Fprintf(f, "DEPLOYD_SERVICE_NAMESPACE=%v\n", a.Job.Request.Service.Ns)
 		fmt.Fprintf(f, "DEPLOYD_SERVICE=%v\n", a.Job.Request.Service.Id)
 		fmt.Fprintf(f, "DEPLOYD_HOST=%v\n", a.host.Host)
@@ -554,6 +555,74 @@ func configureRaft(log *slog.Logger, raftPath string, currentHost *entity.Host, 
 	err = v.WriteConfigTo(f)
 	if err != nil {
 		return fmt.Errorf("failed to write .yaml raft %w", err)
+	}
+
+	// === ETCD RAFT ===
+	// TODO: in their own function
+
+	log.Info("writing etcd-raft.yaml")
+
+	etcdPath := raftPath + "/" + etcdRaftYamlFile
+
+	etcdf, err := os.OpenFile(etcdPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return fmt.Errorf("error while opening etcd-raft.yaml file in %v %w", etcdPath, err)
+	}
+	defer f.Close()
+
+	e := viper.New()
+	e.SetConfigType("yaml")
+
+	for replicakey, replica := range job.RaftConfig.EtcdRaftReplicas {
+		// all value should be baked at job creation time
+
+		// generated
+		// use the same port, only host might different
+		var currentClusterAddress string
+		var id int
+		var cluster []string
+		for idx, target := range job.Target {
+			ur := &url.URL{
+				Scheme: "http",
+				Host:   fmt.Sprintf("%s:%d", target.InternalAddress, replica.AssignedPort),
+			}
+			addr := ur.String()
+			cluster = append(cluster, addr)
+
+			if target.InternalAddress == hostc.InternalAddress {
+				// todo: might need to allow overwrite; but for now keeping it simple
+				currentClusterAddress = addr
+				id = idx + 1
+			}
+		}
+
+		// todo: check if join or not compare to latest successful deployment at job creation time HTTP handler integration
+		var join bool
+		if rcfg, ok := job.RaftConfig.EtcdRaftReplicas[replicakey]; ok {
+			join = rcfg.Join
+		}
+
+		e.Set(fmt.Sprintf("%s.id", replicakey), id)                              // hostIdx                           // host index as specified in the job's Target
+		e.Set(fmt.Sprintf("%s.cluster", replicakey), cluster)                    // http://<host>:<port>
+		e.Set(fmt.Sprintf("%s.bind_address", replicakey), currentClusterAddress) // for this service, this is the agreed bind address <host>:<port>
+		e.Set(fmt.Sprintf("%s.join", replicakey), join)                          // for this service, this is the agreed bind address <host>:<port>
+		e.Set(
+			fmt.Sprintf("%s.wal_dir", replicakey),
+			fmt.Sprintf(
+				"%s/%s_%s/etcd-raft-replica/%s/wal", currentHost.RaftConfig.BaseWALDir, job.Ns, job.Request.Service.Id, replicakey,
+			),
+		)
+		e.Set(
+			fmt.Sprintf("%s.snap_dir", replicakey),
+			fmt.Sprintf(
+				"%s/%s_%s/etcd-raft-replica/%s/snap", currentHost.RaftConfig.BaseNodeHostDir, job.Ns, job.Request.Service.Id, replicakey,
+			),
+		)
+	}
+
+	err = e.WriteConfigTo(etcdf)
+	if err != nil {
+		return fmt.Errorf("failed to write etcd-raft.yaml file %w", err)
 	}
 
 	return nil

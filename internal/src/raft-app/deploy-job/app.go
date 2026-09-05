@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/desain-gratis/common/delivery/mycontent-api/mycontent"
@@ -288,14 +289,25 @@ func (m *raftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploy
 		return nil, err
 	}
 
+	// ETCD
+	raftEtcdConfig := make(map[string]entity.EtcdRaftReplicaConfig)
+	for _, replica := range request.EtcdRaftReplicas {
+		raftEtcdConfig[replica] = entity.EtcdRaftReplicaConfig{
+			// assigned port within the cluster internal address
+			AssignedPort: randomPort(), // ofcors todo add avaoid conflict logic
+			Join:         false,        // todo: calculated with last successful job
+		}
+	}
+
 	job := entity.DeploymentJob{
 		Ns:          request.Ns,
 		PublishedAt: request.PublishedAt,
 	}
 	job.Target = deploymentTarget
 	job.RaftConfig = &entity.RaftConfig{
-		Shards:  raftShards,
-		Service: raftServiceConfig,
+		Shards:           raftShards,
+		Service:          raftServiceConfig,
+		EtcdRaftReplicas: raftEtcdConfig,
 	}
 	job.Request = &request
 
@@ -794,4 +806,8 @@ func (m *raftApp) getJobByID(ctx context.Context, namespace, service, id string)
 
 	// if not found it will be err also, so this is safe
 	return previousJobs[0], nil
+}
+
+func randomPort() uint16 {
+	return uint16(rand.Intn(65535-10000) + 10000)
 }

@@ -41,6 +41,10 @@
       "type": "test"
     }
   },
+  "etcd_raft_replicas": [
+    "deployd",
+    "job"
+  ],
   "timeout_seconds": 900,
   "is_believe": true
 }

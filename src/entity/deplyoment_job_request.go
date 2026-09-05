@@ -31,6 +31,9 @@ type SubmitDeploymentJobRequest struct {
 	RaftPortMapping  map[string]uint16          `json:"raft_port_mapping,omitempty"` // optional if at each host, the port is different
 	RaftDeploymentID uint64                     `json:"raft_deployment_id"`
 
+	// ETCDMAXXING
+	EtcdRaftReplicas []string `json:"etcd_raft_replicas"`
+
 	ModifyKey *string `json:"-"` // hidden; TODO: to be nice, to lock, only the one who have this key can modify the state.
 
 	// TODO: cloudflared configuration
@@ -46,6 +49,11 @@ type SubmitDeploymentJobRequest struct {
 	IsBelieve   bool      `json:"is_believe"`
 	Url         string    `json:"url"`
 	PublishedAt time.Time `json:"published_at"`
+}
+
+type EtcdRaftReplicaConfig struct {
+	AssignedPort uint16 `json:"assigned_port"`
+	Join         bool   `json:"join"`
 }
 
 type RaftShardConfig struct {
