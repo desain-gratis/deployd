@@ -113,8 +113,7 @@ func main() {
 	// 	log.Panic().Msgf("failed to init raft: %v", err)
 	// }
 
-	// test in memory first
-	opts := badger.DefaultOptions(config.GetString("storage.file.app-data"))
+	opts := badger.DefaultOptions(config.GetString("storage.file.config-data"))
 	// opts = opts.WithInMemory(true)
 
 	db, err := badger.Open(opts)
@@ -243,7 +242,13 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 		}
 	}()
 
-	jobApp := deployjob.New(deploydTopic)
+	opts := badger.DefaultOptions(config.GetString("storage.file.job-data"))
+	db, err := badger.Open(opts)
+	if err != nil {
+		log.Fatal().Msgf("UHUY: %v", err)
+	}
+
+	jobApp := deployjob.New(deploydTopic, db)
 
 	ctx, _, err = runneretcd.RunWithConfig("/etc/etcd-raft.yaml", "job", jobApp)
 	if err != nil {
@@ -281,13 +286,6 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 		ctx,
 		deploydTopic,
 		&deployjobintegration.Dependencies{
-			HostConfig: deployjobintegration.HostConfig{
-				LocalClickhouseConfig: deployjobintegration.LocalClickhouseConfig{
-					Address:  config.GetString("storage.clickhouse.replica.address"),
-					Username: config.GetString("storage.clickhouse.replica.username"),
-					Password: config.GetString("storage.clickhouse.replica.password"),
-				},
-			},
 			HostConfigUsecase:        hostConfigUsecase,
 			ServiceDefinitionUsecase: serviceDefinitionUsecase,
 			RepositoryUsecase:        repositoryUsecase,

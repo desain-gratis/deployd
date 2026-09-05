@@ -79,15 +79,9 @@ type ApplyResult func() (any, error)
 // ErrRetryable crashes the state machine to preserve state invariant
 var ErrRetryable = errors.New("retryable")
 
-func New(topic notifier.Topic) *raftApp {
+func New(topic notifier.Topic, dbJob *badger.DB) *raftApp {
 
 	// this app have its own storage, but exposes the mycontent interface via Get.. for external viewing.
-
-	optsJob := badger.DefaultOptions("").WithInMemory(true)
-	dbJob, err := badger.Open(optsJob)
-	if err != nil {
-		log.Fatal().Msgf("UHUY: %v", err)
-	}
 
 	jobStorage := content_badger.NewAutoIncrement(dbJob, TableDeploymentJob, 1)
 	jobLatestStorage := jobStorage.GetLatest()

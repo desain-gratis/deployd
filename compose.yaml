@@ -5,16 +5,14 @@ services:
     # env_file: ".env"
     environment:
       CONFIG: /etc/deployd/local-1.yml
-      DC: "/etc/dragonboat.yaml"
       TZ: Asia/Jakarta
       DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
       DEPLOYD_SECRET: /etc/deployd/local.yml.secret
-      DEPLOYD_RAFT: /etc/dragonboat.yaml
+      DEPLOYD_RAFT: /etc/etcd-raft.yaml
     ports:
       - "9401:9600"
     volumes:
       - ./config/deployd:/etc/deployd
-      - ./config/deployd/raft/config-1.yaml:/etc/dragonboat.yaml
       - ./config/deployd/raft/raft-0.yaml:/etc/etcd-raft.yaml
       - ./www:/var/www
       - ./tmp1/data/data-1:/data
@@ -25,7 +23,6 @@ services:
       - ./tmp1/systemd/:/etc/systemd/system/
       - ./tmp1/usr/local/bin/cloudflared:/usr/local/bin/cloudflared
     depends_on:
-      - clickhouse-deployd1
       - mock-systemd1
     networks:
       - docker-dev_appnet
@@ -36,16 +33,14 @@ services:
     # env_file: ".env"
     environment:
       CONFIG: /etc/deployd/local-2.yml
-      DC: "/etc/dragonboat.yaml"
       TZ: Asia/Jakarta
       DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
       DEPLOYD_SECRET: /etc/deployd/local.yml.secret
-      DEPLOYD_RAFT: /etc/dragonboat.yaml
+      DEPLOYD_RAFT: /etc/etcd-raft.yaml
     ports:
       - "9402:9600"
     volumes:
       - ./config/deployd:/etc/deployd
-      - ./config/deployd/raft/config-2.yaml:/etc/dragonboat.yaml
       - ./config/deployd/raft/raft-1.yaml:/etc/etcd-raft.yaml
       - ./www:/var/www
       - ./tmp2/data/data-2:/data
@@ -56,7 +51,6 @@ services:
       - ./tmp2/systemd/:/etc/systemd/system/
       - ./tmp2/usr/local/bin/cloudflared:/usr/local/bin/cloudflared
     depends_on:
-      - clickhouse-deployd2
       - mock-systemd2
     networks:
       - docker-dev_appnet
@@ -67,16 +61,14 @@ services:
     # env_file: ".env"
     environment:
       CONFIG: /etc/deployd/local-3.yml
-      DC: "/etc/dragonboat.yaml"
       TZ: Asia/Jakarta
       DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
       DEPLOYD_SECRET: /etc/deployd/local.yml.secret
-      DEPLOYD_RAFT: /etc/dragonboat.yaml
+      DEPLOYD_RAFT: /etc/etcd-raft.yaml
     ports:
       - "9403:9600"
     volumes:
       - ./config/deployd:/etc/deployd
-      - ./config/deployd/raft/config-3.yaml:/etc/dragonboat.yaml
       - ./config/deployd/raft/raft-2.yaml:/etc/etcd-raft.yaml
       - ./www:/var/www
       - ./tmp3/data/data-3:/data
@@ -87,115 +79,10 @@ services:
       - ./tmp3/systemd/:/etc/systemd/system/
       - ./tmp3/usr/local/bin/cloudflared:/usr/local/bin/cloudflared
     depends_on:
-      - clickhouse-deployd3
       - mock-systemd3
     networks:
       - docker-dev_appnet
     command: ["./deployd"]
-
-  clickhouse-deployd1:
-    image: clickhouse/clickhouse-server:latest
-    container_name: clickhouse-deployd1
-    restart: on-failure
-    environment:
-      CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: default
-    ports:
-      - "8801:8123"
-      - "9901:9000"
-    volumes:
-      - ./tmp/data/clickhouse_data_deployd1:/var/lib/clickhouse
-      # - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - docker-dev_appnet # you need to create docker-dev folder with compose file in itfor the minio
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
-    deploy:
-      resources:
-        limits:
-          memory: 2G # Sets a memory limit of 1 Gigabyte
-        reservations:
-          memory: 1G
-
-  clickhouse-deployd2:
-    image: clickhouse/clickhouse-server:latest
-    container_name: clickhouse-deployd2
-    restart: on-failure
-    environment:
-      CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: default
-    ports:
-      - "8802:8123"
-      - "9902:9000"
-    volumes:
-      - ./tmp/data/clickhouse_data_deployd2:/var/lib/clickhouse
-      # - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - docker-dev_appnet
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
-    deploy:
-      resources:
-        limits:
-          memory: 2G # Sets a memory limit of 1 Gigabyte
-        reservations:
-          memory: 1G
-
-  clickhouse-deployd3:
-    image: clickhouse/clickhouse-server:latest
-    container_name: clickhouse-deployd3
-    restart: on-failure
-    environment:
-      CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: default
-    ports:
-      - "8803:8123"
-      - "9903:9000"
-    volumes:
-      - ./tmp/data/clickhouse_data_deployd3:/var/lib/clickhouse
-      # - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - docker-dev_appnet
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
-    deploy:
-      resources:
-        limits:
-          memory: 2G # Sets a memory limit of 1 Gigabyte
-        reservations:
-          memory: 1G
-
-  clickhouse-content:
-    image: clickhouse/clickhouse-server:latest
-    container_name: clickhouse-content
-    restart: on-failure
-    environment:
-      CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: default
-    ports:
-      - "8804:8123"
-      - "9904:9000"
-    volumes:
-      - ./tmp/data/clickhouse_data_content:/var/lib/clickhouse
-      # - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - docker-dev_appnet
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
-    deploy:
-      resources:
-        limits:
-          memory: 2G # Sets a memory limit of 1 Gigabyte
-        reservations:
-          memory: 1G
 
   mock-systemd1:
     image: ghcr.io/balena-os/mock-systemd-bus@sha256:79b92200fb6481edfea9776a75d6bf3fd8583b79b7e83868f49ba7b295f397ce

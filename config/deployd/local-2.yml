@@ -28,12 +28,6 @@ storage:
       use_ssl: false
       bucket_name: sewatenan-bucket
       base_public_url: http://localhost:9000/sewatenan-bucket
-  clickhouse:
-    replica:
-      address: "clickhouse-deployd2:9000"
-      username: <secret>
-      password: <secret>
-      database: default
-      read_timeout: 2s
   file:
-    app-data: "/data/deployd"
+    config-data: "/data/deployd/config.db"
+    job-data: "/data/deployd/job.db"

@@ -11,19 +11,8 @@ import (
 	deployjob "github.com/desain-gratis/deployd/internal/src/raft-app/deploy-job"
 )
 
-type HostConfig struct {
-	LocalClickhouseConfig LocalClickhouseConfig `json:"local_clickhouse_config"`
-}
-type LocalClickhouseConfig struct {
-	Address  string `json:"address"`
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
 // Dependencies in the integration side (not inside raft)
 type Dependencies struct {
-	HostConfig HostConfig
-
 	// host specific configuration
 	HostConfigUsecase *mycontent_base.Handler[*entity.Host]
 

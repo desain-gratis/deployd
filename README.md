@@ -94,19 +94,21 @@ EOF
 ```bash 
 sudo tee /etc/deployd/config.yaml >/dev/null <<'EOF'
 host:
+  id: <integer>
   name: <hostname>
   os: <os, eg. linux>
   architecture: <arch, eg. amd64>
+  internal_address: deployd1 # can use ip
 
-# base raft configuration for deployed apps (dragonboat)
+# base raft configuration for deployed apps
 raft:
-  replica_id: <replica id>
-  base_node_host_dir: <raft host dir /data>
-  base_wal_dir: <raft host wal dir /data>
+  replica_id: <integer, can be the same as host id>
+  base_node_host_dir: "/data"
+  base_wal_dir: "/data"
 
 http:
   public:
-    address: <bind address eg. :9401>
+    address: <http bind address eg. :9401>
     fqdn: <user accessible URL, eg. https://deployd.com>
 
 ui:
@@ -119,15 +121,11 @@ storage:
       key_id: <secret>
       key_secret: <secret>
       use_ssl: false
-      bucket_name: <s3 bucket>
-      base_public_url: <public accessible URL of the storage>
-  clickhouse:
-    replica:
-      address: <clickhouse address>
-      username: <secret>
-      password: <secret>
-      database: <secret>
-      read_timeout: 2s
+      bucket_name: <s3 bucket name>
+      base_public_url: <public accessible URL of the bucket>
+  file:
+    config-data: "/data/deployd/config.db"
+    job-data: "/data/deployd/job.db"
 EOF
 
 ```
