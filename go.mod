@@ -11,7 +11,7 @@ require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.42.0
 	github.com/coder/websocket v1.8.14
 	github.com/coreos/go-systemd/v22 v22.7.0
-	github.com/desain-gratis/common v0.0.2-0.20260907175705-154a559ab889
+	github.com/desain-gratis/common v0.0.2-0.20260907211720-19392582adb5
 	github.com/dgraph-io/badger/v4 v4.9.6
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/julienschmidt/httprouter v1.3.0
