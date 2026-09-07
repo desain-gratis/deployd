@@ -4,7 +4,7 @@ deployd:
     - http://deployd1:21521
     - http://deployd2:21522
     - http://deployd3:21523
-  bind_address: localhost:21523
+  bind_address: deployd3:21523
   join: false
 job:
   id: 3
@@ -12,5 +12,5 @@ job:
     - http://deployd1:21531
     - http://deployd2:21532
     - http://deployd3:21533
-  bind_address: localhost:21533
+  bind_address: deployd3:21533
   join: false
