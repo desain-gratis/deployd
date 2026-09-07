@@ -636,17 +636,6 @@ func startRouter(ctx context.Context, wg *sync.WaitGroup, router *httprouter.Rou
 	}
 }
 
-func withCors(router http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		header := w.Header()
-		header.Set("Access-Control-Allow-Methods", header.Get("Allow"))
-		header.Set("Access-Control-Allow-Origin", "*")
-		// header.Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-		header.Set("Access-Control-Allow-Headers", "Content-Type")
-		router.ServeHTTP(w, r)
-	})
-}
-
 func filterDeploymentJob(reqNs, reqService, reqId string) func(any) bool {
 	return func(msg any) bool {
 		var ns, srv, id string
