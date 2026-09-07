@@ -10,6 +10,7 @@ raft:
   replica_id: 3
   base_node_host_dir: "/data"
   base_wal_dir: "/data"
+  etcd_config: "/etc/deployd/etcd-raft.yaml"
 
 http:
   public:

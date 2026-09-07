@@ -8,12 +8,12 @@ services:
       TZ: Asia/Jakarta
       DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
       DEPLOYD_SECRET: /etc/deployd/local.yml.secret
-      DEPLOYD_RAFT: /etc/etcd-raft.yaml
+      DEPLOYD_RAFT: /etc/deployd/etcd-raft.yaml
     ports:
       - "9401:9600"
     volumes:
       - ./config/deployd:/etc/deployd
-      - ./config/deployd/raft/raft-0.yaml:/etc/etcd-raft.yaml
+      - ./config/deployd/raft/raft-0.yaml:/etc/deployd/etcd-raft.yaml
       - ./www:/var/www
       - ./tmp1/data/data-1:/data
       - ./tmp1/dbus:/dbus
@@ -36,12 +36,12 @@ services:
       TZ: Asia/Jakarta
       DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
       DEPLOYD_SECRET: /etc/deployd/local.yml.secret
-      DEPLOYD_RAFT: /etc/etcd-raft.yaml
+      DEPLOYD_RAFT: /etc/deployd/etcd-raft.yaml
     ports:
       - "9402:9600"
     volumes:
       - ./config/deployd:/etc/deployd
-      - ./config/deployd/raft/raft-1.yaml:/etc/etcd-raft.yaml
+      - ./config/deployd/raft/raft-1.yaml:/etc/deployd/etcd-raft.yaml
       - ./www:/var/www
       - ./tmp2/data/data-2:/data
       - ./tmp2/dbus:/dbus
@@ -64,12 +64,12 @@ services:
       TZ: Asia/Jakarta
       DBUS_SYSTEM_BUS_ADDRESS: "unix:path=/dbus/system_bus_socket"
       DEPLOYD_SECRET: /etc/deployd/local.yml.secret
-      DEPLOYD_RAFT: /etc/etcd-raft.yaml
+      DEPLOYD_RAFT: /etc/deployd/etcd-raft.yaml
     ports:
       - "9403:9600"
     volumes:
       - ./config/deployd:/etc/deployd
-      - ./config/deployd/raft/raft-2.yaml:/etc/etcd-raft.yaml
+      - ./config/deployd/raft/raft-2.yaml:/etc/deployd/etcd-raft.yaml
       - ./www:/var/www
       - ./tmp3/data/data-3:/data
       - ./tmp3/dbus:/dbus

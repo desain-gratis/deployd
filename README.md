@@ -11,6 +11,7 @@ This guide describes how to manually install **deployd** as a systemd service.
 * Linux x86_64 (amd64)
 * systemd
 * Root or sudo access
+* 3 hosts/PC in with private static internal IP
 
 ## Directory Layout
 
@@ -39,25 +40,17 @@ The service definition is:
 Download the latest release from GitHub.
 
 ```bash
-wget https://github.com/desain-gratis/deployd/releases/latest/download/deployd-linux-amd64.tar.gz
+wget https://github.com/desain-gratis/deployd/releases/download/v0.0.2/deployd-linux-amd64.tar.gz
 ```
 
 ---
 
-## 2. Create Directories
-
-```bash
-sudo mkdir -p /opt/deployd
-sudo mkdir -p /etc/deployd
-```
-
----
-
-## 3. Extract the Archive
+## 2. Extract the Archive
 
 Extract the release into the deployment directory.
 
 ```bash
+sudo mkdir -p /opt/deployd
 sudo tar -xzf deployd-linux-amd64.tar.gz -C /opt/deployd
 ```
 
@@ -76,40 +69,45 @@ sudo chmod +x /opt/deployd/deployd
 
 ---
 
-## 4. Create the Config & Environment File
+## 3. Create the Config & Environment File
 
 
 ```bash
 sudo mkdir -p /etc/deployd
-
 sudo tee /etc/deployd/overwrite.env >/dev/null <<'EOF'
 CONFIG=/etc/deployd/config.yaml
 SECRET=/etc/deployd/secret.yaml
-DEPLOYD_RAFT=/etc/deployd/raft.yaml
 EOF
 
 ```
 
+Next, create the config. Please adjust it according to your own host information.
+For example, we have 3 hosts with these internal-local IP address. 
+
+* host1 (100.0.0.1), ID: 1
+* host2 (100.0.0.2), ID: 2
+* host3 (100.0.0.3), ID: 3
 
 ```bash 
 sudo tee /etc/deployd/config.yaml >/dev/null <<'EOF'
 host:
-  id: <integer>
-  name: <hostname>
-  os: <os, eg. linux>
-  architecture: <arch, eg. amd64>
-  internal_address: deployd1 # can use ip
+  id: 1
+  name: host1
+  os: linux
+  architecture: amd64
+  internal_address: 100.0.0.1
 
 # base raft configuration for deployed apps
 raft:
-  replica_id: <integer, can be the same as host id>
+  replica_id: 1
   base_node_host_dir: "/data"
   base_wal_dir: "/data"
+  etcd_config: "/etc/deployd/etcd-raft.yaml"
 
 http:
   public:
-    address: <http bind address eg. :9401>
-    fqdn: <user accessible URL, eg. https://deployd.com>
+    address: 100.0.0.1:9401
+    fqdn: http://host1.com:9401
 
 ui:
   dir: "/var/www"
@@ -118,8 +116,8 @@ storage:
   s3:
     blob:
       endpoint: <s3 endpoint>
-      key_id: <secret>
-      key_secret: <secret>
+      key_id: <s3 access key id>
+      key_secret: <s3 key secret>
       use_ssl: false
       bucket_name: <s3 bucket name>
       base_public_url: <public accessible URL of the bucket>
@@ -130,9 +128,9 @@ EOF
 
 ```
 
-## 5. Create the Secret File
+## 4. Create the Secret File
 
-They have the same structure as env, and will overwrite the overwrite.env
+They can be used to overwrite config.yaml with secret. (but now it's not used)
 
 ```bash
 sudo tee /etc/deployd/secret.yaml >/dev/null <<'EOF'
@@ -140,6 +138,31 @@ sudo tee /etc/deployd/secret.yaml >/dev/null <<'EOF'
 EOF
 ```
 
+## 5. Create the Etcd Raft File
+
+Etcd raft is what makes this a distributed application.
+
+```bash
+sudo tee /etc/deployd/etcd-raft.yaml >/dev/null <<'EOF'
+deployd:
+  id: 1
+  cluster:
+    - http://host1:21521
+    - http://host2:21521
+    - http://host3:21521
+  bind_address: 100.0.0.1:21521
+  join: false
+job:
+  id: 1
+  cluster:
+    - http://host1:21531
+    - http://host2:21531
+    - http://host3:21531
+  bind_address: 100.0.0.1:21531
+  join: false
+
+EOF
+```
 
 
 ## 6. Create the systemd Service
@@ -156,6 +179,7 @@ WorkingDirectory=/opt/deployd
 ExecStart=/opt/deployd/deployd
 Restart=always
 RestartSec=5
+EnvironmentFile=-/etc/deployd/overwrite.env
 
 [Install]
 WantedBy=multi-user.target
@@ -197,4 +221,14 @@ Follow logs:
 
 ```bash
 sudo journalctl -u deployd -f
+```
+
+Since it is expected to be run on 3 host, it is OK to have error now.
+We can proceed with the next hosts.
+After all 3 has been configured, there should be no more error log.
+
+We then can try the endpoint to validate.
+
+```bash
+curl -H "X-Namespace: *" "http://host1:9401/deployd/service"
 ```

@@ -146,7 +146,7 @@ func main() {
 	router := httprouter.New()
 
 	// Run the raft app
-	ctx, _, err = runneretcd.RunWithConfig("/etc/etcd-raft.yaml", "deployd", badgerStorageApp)
+	ctx, _, err = runneretcd.RunWithConfig(config.GetString("raft.etcd_config"), "deployd", badgerStorageApp)
 	if err != nil {
 		log.Fatal().Msgf("err init raft: %v", err)
 	}
@@ -250,7 +250,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 
 	jobApp := deployjob.New(deploydTopic, db)
 
-	ctx, _, err = runneretcd.RunWithConfig("/etc/etcd-raft.yaml", "job", jobApp)
+	ctx, _, err = runneretcd.RunWithConfig(config.GetString("raft.etcd_config"), "job", jobApp)
 	if err != nil {
 		log.Fatal().Msgf("err init raft: %v", err)
 	}
