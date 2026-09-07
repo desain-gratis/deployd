@@ -13,10 +13,8 @@ import (
 	content_badger "github.com/desain-gratis/common/delivery/mycontent-api/storage/content/badger"
 	"github.com/desain-gratis/common/lib/notifier"
 	"github.com/desain-gratis/common/lib/raft"
-	raft_utility "github.com/desain-gratis/common/lib/raft/utility"
 	"github.com/dgraph-io/badger/v4"
 	"github.com/hashicorp/golang-lru/v2/expirable"
-	"github.com/rs/zerolog/log"
 
 	"github.com/desain-gratis/deployd/src/entity"
 )
@@ -57,8 +55,6 @@ type raftApp struct {
 	jobUsecase           *mycontent_base.Handler[*entity.DeploymentJob]
 	jobLatestUsecase     *mycontent_base.Handler[*entity.DeploymentJob]
 	successfulJobUsecase *mycontent_base.Handler[*entity.DeploymentJobByService]
-
-	mw *raft_utility.BadgerMetadataWriter
 }
 
 type jobKey struct {
@@ -101,7 +97,6 @@ func New(topic notifier.Topic, dbJob *badger.DB) *raftApp {
 		jobLatestUsecase:     jobLatestUsecase,
 		successfulJobUsecase: successfulJobUsecase,
 		jobCache:             jobCache,
-		mw:                   raft_utility.NewBadgerMetadataWriter(dbJob, "deploy-job-last-applied-index"),
 	}
 }
 
@@ -119,36 +114,9 @@ func (m *raftApp) GetSuccessfulJobStore() *mycontent_base.Handler[*entity.Deploy
 	return m.successfulJobUsecase
 }
 
-// todo: improve pattern
-// evaluate and apply
-func (m *raftApp) apply(ctx context.Context, entry raft.EntryV2, result ApplyResult, err error) (any, error) {
-	if errors.Is(err, ErrRetryable) {
-		log.Fatal().Msgf("crashing the state machine: %v", err)
-	}
-
-	errApply := m.mw.Apply(ctx, entry)
-	if errApply != nil {
-		log.Fatal().Msgf("crashing the state machine (meta): %v", err)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	if result == nil {
-		result = func() (any, error) {
-			return "success", nil
-		}
-	}
-
-	// the response we want from user
-	return result()
-}
-
 func (m *raftApp) OnUpdateV2(ctx context.Context, entry raft.EntryV2) (any, error) {
 	cmd, err := parseAs[CommandWrapper](entry.Data)
 	if err != nil {
-		defer m.mw.Apply(ctx, entry) // bad data, ignore
 		return nil, err
 	}
 
@@ -157,55 +125,40 @@ func (m *raftApp) OnUpdateV2(ctx context.Context, entry raft.EntryV2) (any, erro
 		// start create job
 		payload, err := parseAs[entity.SubmitDeploymentJobRequest](cmd.Value)
 		if err != nil {
-			defer m.mw.Apply(ctx, entry) // bad data, ignore
 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(cmd.Value))
 		}
-		result, err := m.userSubmitJob(ctx, payload)
-		return m.apply(ctx, entry, result, err)
+		return m.userSubmitJob(ctx, payload)
 	case CommandUserCancelJob:
 		// explicitly cancelling job, we cancel
 		payload, err := parseAs[CancelJobRequest](cmd.Value)
 		if err != nil {
-			defer m.mw.Apply(ctx, entry) // bad data, ignore
 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(cmd.Value))
 		}
-		result, err := m.cancelJob(ctx, payload)
-		return m.apply(ctx, entry, result, err)
+		return m.cancelJob(ctx, payload)
 	case CommandHostConfigurationUpdate:
 		// feed installation (sub)state update to raft
 		payload, err := parseAs[ConfigurationUpdateRequest](cmd.Value)
 		if err != nil {
-			defer m.mw.Apply(ctx, entry) // bad data, ignore
 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(cmd.Value))
 		}
-		result, err := m.applyHostConfigurationUpdate(ctx, payload)
-		return m.apply(ctx, entry, result, err)
+		return m.applyHostConfigurationUpdate(ctx, payload)
 	case CommandRestartConfirmation:
 		// if restart is confirmed, we do restart
 		payload, err := parseAs[RestartConfirmation](cmd.Value)
 		if err != nil {
-			defer m.mw.Apply(ctx, entry) // bad data, ignore
 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(cmd.Value))
 		}
-		result, err := m.restartHostService(ctx, payload)
-		return m.apply(ctx, entry, result, err)
+		return m.restartHostService(ctx, payload)
 	case CommandHostRestartServiceUpdate:
 		// feed deployment update (sub)state update to raft
 		payload, err := parseAs[HostRestartServiceUpdateRequest](cmd.Value)
 		if err != nil {
-			defer m.mw.Apply(ctx, entry) // bad data, ignore
 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(cmd.Value))
 		}
-		result, err := m.applyHostRestartServiceUpdate(ctx, payload)
-		return m.apply(ctx, entry, result, err)
+		return m.applyHostRestartServiceUpdate(ctx, payload)
 	default:
-		defer m.mw.Apply(ctx, entry) // bad data, ignore
 		return nil, fmt.Errorf("unknown command: %s", cmd.Name)
 	}
-}
-
-func (m *raftApp) InitV2(ctx context.Context) (uint64, error) {
-	return m.mw.GetLastAppliedIndex(ctx)
 }
 
 // func (m *raftApp) OnUpdate(ctx context.Context, e raft.Entry) (raft.OnAfterApply, error) {
