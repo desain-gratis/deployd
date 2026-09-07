@@ -40,7 +40,7 @@ The service definition is:
 Download the latest release from GitHub.
 
 ```bash
-wget https://github.com/desain-gratis/deployd/releases/download/v0.0.2/deployd-linux-amd64.tar.gz
+wget https://github.com/desain-gratis/deployd/releases/download/v0.0.1/deployd-linux-amd64.tar.gz
 ```
 
 ---
