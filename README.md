@@ -81,12 +81,7 @@ EOF
 
 ```
 
-Next, create the config. Please adjust it according to your own host information.
-For example, we have 3 hosts with these internal-local IP address. 
-
-* host1 (100.0.0.1), ID: 1
-* host2 (100.0.0.2), ID: 2
-* host3 (100.0.0.3), ID: 3
+Next, create the config. Please adjust it according to your own host information. Explanation below the example.
 
 ```bash 
 sudo tee /etc/deployd/config.yaml >/dev/null <<'EOF'
@@ -127,6 +122,26 @@ storage:
 EOF
 
 ```
+
+_http bind address_ is where the deployd API HTTP interface actually bind to.
+
+http bind address = http://100.0.0.1:9401
+
+_fqdn_
+is used to access the HTTP endpoint from external. 
+Usually, I configure the load balancer with one single domain that will go to my 3 hosts. Or, you can just put one of the host.
+
+fqdn = http://mycluster.com 
+
+or 
+
+fqdn = http://100.0.0.1:9401
+
+Hosts:
+* hostname = host1, hostname_internal_ip = 100.0.0.1, host_id: 1
+* hostname = host2, hostname_internal_ip = 100.0.0.2, host_id: 2
+* hostname = host3, hostname_internal_ip = 100.0.0.3, host_id: 3
+
 
 ## 4. Create the Secret File
 
