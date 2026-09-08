@@ -38,16 +38,16 @@ const (
 	CommandHostRestartServiceUpdate Command = "deployd.host.restart-service-update"
 )
 
-// var _ raft.Application = &raftApp{}
-var _ raft.ApplicationV2 = (*raftApp)(nil)
+// var _ raft.Application = &RaftApp{}
+var _ raft.ApplicationV2 = (*RaftApp)(nil)
 
-// raftApp / coordinator
+// RaftApp / coordinator
 //
 // An example to do raft application's composition (aka. inheritance).
 // It extends the existing "ContentApp" implementation with our business logic.
 // If you have multiple, you can use actual composition instead, and then make sure the Raft App lifecycle
 // is executed for each instance
-type raftApp struct {
+type RaftApp struct {
 	topic notifier.Topic
 
 	jobCache *expirable.LRU[jobKey, *entity.DeploymentJob]
@@ -75,7 +75,7 @@ type ApplyResult func() (any, error)
 // ErrRetryable crashes the state machine to preserve state invariant
 var ErrRetryable = errors.New("retryable")
 
-func New(topic notifier.Topic, dbJob *badger.DB) *raftApp {
+func New(topic notifier.Topic, dbJob *badger.DB) *RaftApp {
 
 	// this app have its own storage, but exposes the mycontent interface via Get.. for external viewing.
 
@@ -91,7 +91,7 @@ func New(topic notifier.Topic, dbJob *badger.DB) *raftApp {
 	// cache is important because we don't rely on DB for get-and-set operation (expect stale data, trade off with high write)
 	jobCache := expirable.NewLRU[jobKey, *entity.DeploymentJob](256, nil, 20*time.Minute) // at least until the DB can catch up
 
-	return &raftApp{
+	return &RaftApp{
 		topic:                topic,
 		jobUsecase:           jobUsecase,
 		jobLatestUsecase:     jobLatestUsecase,
@@ -100,21 +100,21 @@ func New(topic notifier.Topic, dbJob *badger.DB) *raftApp {
 	}
 }
 
-func (m *raftApp) GetJobStore() *mycontent_base.Handler[*entity.DeploymentJob] {
+func (m *RaftApp) GetJobStore() *mycontent_base.Handler[*entity.DeploymentJob] {
 	// todo: make view only
 	return m.jobUsecase
 }
 
-func (m *raftApp) GetJobLatestUsecase() *mycontent_base.Handler[*entity.DeploymentJob] {
+func (m *RaftApp) GetJobLatestUsecase() *mycontent_base.Handler[*entity.DeploymentJob] {
 	// todo: make view only
 	return m.jobLatestUsecase
 }
 
-func (m *raftApp) GetSuccessfulJobStore() *mycontent_base.Handler[*entity.DeploymentJobByService] {
+func (m *RaftApp) GetSuccessfulJobStore() *mycontent_base.Handler[*entity.DeploymentJobByService] {
 	return m.successfulJobUsecase
 }
 
-func (m *raftApp) OnUpdateV2(ctx context.Context, entry raft.EntryV2) (any, error) {
+func (m *RaftApp) OnUpdateV2(ctx context.Context, entry raft.EntryV2) (any, error) {
 	cmd, err := parseAs[CommandWrapper](entry.Data)
 	if err != nil {
 		return nil, err
@@ -127,41 +127,63 @@ func (m *raftApp) OnUpdateV2(ctx context.Context, entry raft.EntryV2) (any, erro
 		if err != nil {
 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(cmd.Value))
 		}
-		return m.userSubmitJob(ctx, payload)
+		result, err := m.userSubmitJob(ctx, payload)
+		if err != nil {
+			return nil, fmt.Errorf("failed to submit job: %w", err)
+		}
+		return result()
 	case CommandUserCancelJob:
 		// explicitly cancelling job, we cancel
 		payload, err := parseAs[CancelJobRequest](cmd.Value)
 		if err != nil {
 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(cmd.Value))
 		}
-		return m.cancelJob(ctx, payload)
+		result, err := m.cancelJob(ctx, payload)
+		if err != nil {
+			return nil, fmt.Errorf("failed to cancel job: %w", err)
+		}
+
+		return result()
 	case CommandHostConfigurationUpdate:
 		// feed installation (sub)state update to raft
 		payload, err := parseAs[ConfigurationUpdateRequest](cmd.Value)
 		if err != nil {
 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(cmd.Value))
 		}
-		return m.applyHostConfigurationUpdate(ctx, payload)
+		result, err := m.applyHostConfigurationUpdate(ctx, payload)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update configuration: %w", err)
+		}
+		return result()
 	case CommandRestartConfirmation:
 		// if restart is confirmed, we do restart
 		payload, err := parseAs[RestartConfirmation](cmd.Value)
 		if err != nil {
 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(cmd.Value))
 		}
-		return m.restartHostService(ctx, payload)
+		result, err := m.restartHostService(ctx, payload)
+		if err != nil {
+			return nil, fmt.Errorf("failed restart host's service: %w", err)
+		}
+		return result()
 	case CommandHostRestartServiceUpdate:
 		// feed deployment update (sub)state update to raft
 		payload, err := parseAs[HostRestartServiceUpdateRequest](cmd.Value)
 		if err != nil {
 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(cmd.Value))
 		}
-		return m.applyHostRestartServiceUpdate(ctx, payload)
+		result, err := m.applyHostRestartServiceUpdate(ctx, payload)
+		if err != nil {
+			return nil, fmt.Errorf("failed to restart service update: %w", err)
+		}
+		return result()
 	default:
 		return nil, fmt.Errorf("unknown command: %s", cmd.Name)
 	}
+
 }
 
-// func (m *raftApp) OnUpdate(ctx context.Context, e raft.Entry) (raft.OnAfterApply, error) {
+// func (m *RaftApp) OnUpdate(ctx context.Context, e raft.Entry) (raft.OnAfterApply, error) {
 // 	// make it easier for everyone..
 // 	switch Command(e.Command) {
 // 	case CommandUserSubmitJob:
@@ -210,7 +232,7 @@ func (m *raftApp) OnUpdateV2(ctx context.Context, entry raft.EntryV2) (any, erro
 // Because we're using Golang composition / aka inheritance, we do not need to implement the rest of raft.Application method.
 // Later if we have multiple ContentApp, then you need to implement it to make sure all method are executed.
 
-func (m *raftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploymentJobRequest) (ApplyResult, error) {
+func (m *RaftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploymentJobRequest) (ApplyResult, error) {
 	// TODO: make sure there is no active deployment for the namespace/service pair.
 	var previousJob *entity.DeploymentJob
 	previousSuccessfulDeployment, err := m.successfulJobUsecase.Get(ctx, request.Service.Ns, nil, request.Service.Id)
@@ -294,7 +316,7 @@ func (m *raftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploy
 	}, nil
 }
 
-func (m *raftApp) cancelJob(ctx context.Context, request CancelJobRequest) (ApplyResult, error) {
+func (m *RaftApp) cancelJob(ctx context.Context, request CancelJobRequest) (ApplyResult, error) {
 	previousJob, err := m.getJobByID(ctx, request.Ns, request.Service, request.JobId)
 	if err != nil {
 		return nil, err
@@ -329,7 +351,7 @@ func (m *raftApp) cancelJob(ctx context.Context, request CancelJobRequest) (Appl
 }
 
 // Host configuration update
-func (m *raftApp) applyHostConfigurationUpdate(ctx context.Context, request ConfigurationUpdateRequest) (ApplyResult, error) {
+func (m *RaftApp) applyHostConfigurationUpdate(ctx context.Context, request ConfigurationUpdateRequest) (ApplyResult, error) {
 	job, err := m.getJobByID(ctx, request.Ns, request.Service, request.JobId)
 	if err != nil {
 		return nil, err
@@ -417,7 +439,7 @@ func (m *raftApp) applyHostConfigurationUpdate(ctx context.Context, request Conf
 	}, nil
 }
 
-func (m *raftApp) restartHostService(ctx context.Context, request RestartConfirmation) (ApplyResult, error) {
+func (m *RaftApp) restartHostService(ctx context.Context, request RestartConfirmation) (ApplyResult, error) {
 	job, err := m.getJobByID(ctx, request.Ns, request.Service, request.JobId)
 	if err != nil {
 		return nil, err
@@ -465,7 +487,7 @@ func (m *raftApp) restartHostService(ctx context.Context, request RestartConfirm
 	}, nil
 }
 
-func (m *raftApp) applyHostRestartServiceUpdate(ctx context.Context, request HostRestartServiceUpdateRequest) (ApplyResult, error) {
+func (m *RaftApp) applyHostRestartServiceUpdate(ctx context.Context, request HostRestartServiceUpdateRequest) (ApplyResult, error) {
 	job, err := m.getJobByID(ctx, request.Ns, request.Service, request.JobId)
 	if err != nil {
 		return nil, err
@@ -622,7 +644,7 @@ func getLeaderByTarget(target []entity.Host) (entity.Host, error) {
 	return target[len(target)-1], nil
 }
 
-func (m *raftApp) getRaftServiceConfig(previousJob *entity.DeploymentJob, target []entity.Host, request entity.SubmitDeploymentJobRequest) (map[string]entity.RaftServiceConfig, error) {
+func (m *RaftApp) getRaftServiceConfig(previousJob *entity.DeploymentJob, target []entity.Host, request entity.SubmitDeploymentJobRequest) (map[string]entity.RaftServiceConfig, error) {
 	if previousJob != nil {
 		// always use previous config (because it's already "baked")
 		// change in configuration is possible, but only with new deployment
@@ -659,7 +681,7 @@ func (m *raftApp) getRaftServiceConfig(previousJob *entity.DeploymentJob, target
 	return result, nil
 }
 
-func (m *raftApp) getRaftShardsConfig(previousJob *entity.DeploymentJob, target []entity.Host, request entity.SubmitDeploymentJobRequest) (map[uint64]entity.RaftShardConfig, error) {
+func (m *RaftApp) getRaftShardsConfig(previousJob *entity.DeploymentJob, target []entity.Host, request entity.SubmitDeploymentJobRequest) (map[uint64]entity.RaftShardConfig, error) {
 	bootstrapHost, err := getLeaderByTarget(target)
 	if err != nil {
 		return nil, err
@@ -682,7 +704,7 @@ func (m *raftApp) getRaftShardsConfig(previousJob *entity.DeploymentJob, target 
 	return replica, nil
 }
 
-func (m *raftApp) getDeploymentTarget(previous *entity.DeploymentJob, request entity.SubmitDeploymentJobRequest) ([]entity.Host, error) {
+func (m *RaftApp) getDeploymentTarget(previous *entity.DeploymentJob, request entity.SubmitDeploymentJobRequest) ([]entity.Host, error) {
 	// if there is previous deployment, we use that.
 	// right now, we do not support other logic.. (can be later in upscale / downscale / change membership scenario)
 	if previous != nil {
@@ -736,7 +758,7 @@ func initDeploymentJobState(job *entity.DeploymentJob) {
 }
 
 // todo: refac fac
-func (m *raftApp) getJobByID(ctx context.Context, namespace, service, id string) (*entity.DeploymentJob, error) {
+func (m *RaftApp) getJobByID(ctx context.Context, namespace, service, id string) (*entity.DeploymentJob, error) {
 	// check cache
 	kc := jobKey{namespace: namespace, service: service, id: id}
 	job, ok := m.jobCache.Get(kc)
