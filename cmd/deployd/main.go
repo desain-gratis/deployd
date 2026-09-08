@@ -77,7 +77,7 @@ var (
 )
 
 func main() {
-	ctx, cancel := context.WithCancelCause(context.Background())
+	appCtx, cancel := context.WithCancelCause(context.Background())
 
 	initConfig()
 
@@ -113,10 +113,7 @@ func main() {
 	// 	log.Panic().Msgf("failed to init raft: %v", err)
 	// }
 
-	opts := badger.DefaultOptions(config.GetString("storage.file.config-data"))
-	// opts = opts.WithInMemory(true)
-
-	db, err := badger.Open(opts)
+	db, err := badger.Open(badger.DefaultOptions(config.GetString("storage.file.config-data")))
 	if err != nil {
 		log.Fatal().Msgf("UHUY %v", err)
 	}
@@ -145,13 +142,14 @@ func main() {
 	wg := new(sync.WaitGroup)
 	router := httprouter.New()
 
+	// enableSystemdModule(ctx, router)
+
 	// Run the raft app
-	ctx, _, err = runneretcd.RunWithConfig(config.GetString("raft.etcd_config"), "deployd", badgerStorageApp)
+	// This is all the place to store configuration (mycontent maxxing)
+	ctx, _, err := runneretcd.RunWithConfig(appCtx, config.GetString("raft.etcd_config"), "deployd", badgerStorageApp)
 	if err != nil {
 		log.Fatal().Msgf("err init raft: %v", err)
 	}
-	// This is all the place to store configuration (mycontent maxxing)
-	// enableSystemdModule(ctx, router)
 	enableArtifactdModule(ctx, router, badgerStorageApp)
 	enableDeploydModule(ctx, router, badgerStorageApp)
 	enableSecretdModule(ctx, router, badgerStorageApp)
@@ -160,7 +158,6 @@ func main() {
 	// It can also exposes mycontent datastore for easy access (read only).
 	// All write command are managed by the application
 	enableJobModule(ctx, router)
-
 	enableUI(ctx, router)
 
 	err = initHostInformation(ctx)
@@ -170,7 +167,8 @@ func main() {
 
 	// update host config first
 
-	go startRouter(ctx, wg, router, config.GetString("http.public.address"))
+	// appCtx
+	go startRouter(appCtx, wg, router, config.GetString("http.public.address"))
 
 	sigint := make(chan os.Signal, 1)
 	signal.Notify(sigint, os.Interrupt, syscall.SIGTERM)
@@ -242,15 +240,14 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 		}
 	}()
 
-	opts := badger.DefaultOptions(config.GetString("storage.file.job-data"))
-	db, err := badger.Open(opts)
+	db, err := badger.Open(badger.DefaultOptions(config.GetString("storage.file.job-data")))
 	if err != nil {
 		log.Fatal().Msgf("UHUY: %v", err)
 	}
 
 	jobApp := deployjob.New(deploydTopic, db)
 
-	ctx, _, err = runneretcd.RunWithConfig(config.GetString("raft.etcd_config"), "job", jobApp)
+	ctx, _, err = runneretcd.RunWithConfig(ctx, config.GetString("raft.etcd_config"), "job", jobApp)
 	if err != nil {
 		log.Fatal().Msgf("err init raft: %v", err)
 	}
