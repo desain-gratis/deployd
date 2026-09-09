@@ -31,6 +31,7 @@ import (
 	// raftr "github.com/desain-gratis/common/lib/raft/runner"
 	runneretcd "github.com/desain-gratis/common/lib/raft/runner-etcd"
 	deployjobintegration "github.com/desain-gratis/deployd/internal/src/deploy-job"
+	configurenginxunitjob "github.com/desain-gratis/deployd/internal/src/raft-app/configure-nginx-unit"
 	deployjob "github.com/desain-gratis/deployd/internal/src/raft-app/deploy-job"
 	"github.com/desain-gratis/deployd/internal/src/systemd"
 	"github.com/desain-gratis/deployd/src/deployd"
@@ -158,6 +159,7 @@ func main() {
 	// It can also exposes mycontent datastore for easy access (read only).
 	// All write command are managed by the application
 	enableJobModule(ctx, router)
+
 	enableUI(ctx, router)
 
 	err = initHostInformation(ctx)
@@ -347,6 +349,24 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 		reqId := r.URL.Query().Get("id")
 		handler.Websocket(ctx, wsWhitelist, filterWorkerLog(reqNs, srvId, reqId))(w, r, p)
 	})
+}
+
+func enableNginxUnitConfigModule(ctx context.Context, router *httprouter.Router) {
+	db, err := badger.Open(badger.DefaultOptions(config.GetString("storage.file.job-nginx-unit-data")))
+	if err != nil {
+		log.Fatal().Msgf("UHUY: %v", err)
+	}
+
+	jobApp := configurenginxunitjob.New(deploydTopic, db)
+
+	ctx, _, err = runneretcd.RunWithConfig(ctx, config.GetString("raft.etcd_config"), "job", jobApp)
+	if err != nil {
+		log.Fatal().Msgf("err init raft: %v", err)
+	}
+
+	// configurenginxunit.New(ctx, deploydTopic, &configurenginxunit.Dependencies{
+	// RaftNginxUnitUsecase: jobApp,
+	// })
 }
 
 func enableSecretdModule(ctx context.Context, router *httprouter.Router, raftStorage *content_badgerraft.BadgerRaftApp) {
