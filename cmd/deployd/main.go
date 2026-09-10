@@ -30,6 +30,7 @@ import (
 
 	// raftr "github.com/desain-gratis/common/lib/raft/runner"
 	runneretcd "github.com/desain-gratis/common/lib/raft/runner-etcd"
+	configurenginxunit "github.com/desain-gratis/deployd/internal/src/configure-nginx-unit"
 	deployjobintegration "github.com/desain-gratis/deployd/internal/src/deploy-job"
 	configurenginxunitjob "github.com/desain-gratis/deployd/internal/src/raft-app/configure-nginx-unit"
 	deployjob "github.com/desain-gratis/deployd/internal/src/raft-app/deploy-job"
@@ -159,6 +160,7 @@ func main() {
 	// It can also exposes mycontent datastore for easy access (read only).
 	// All write command are managed by the application
 	enableJobModule(ctx, router)
+	enableNginxUnitConfigModule(ctx, router)
 
 	enableUI(ctx, router)
 
@@ -359,14 +361,28 @@ func enableNginxUnitConfigModule(ctx context.Context, router *httprouter.Router)
 
 	jobApp := configurenginxunitjob.New(deploydTopic, db)
 
-	ctx, _, err = runneretcd.RunWithConfig(ctx, config.GetString("raft.etcd_config"), "job", jobApp)
+	ctx, _, err = runneretcd.RunWithConfig(ctx, config.GetString("raft.etcd_config"), "job-nginx-unit", jobApp)
 	if err != nil {
 		log.Fatal().Msgf("err init raft: %v", err)
 	}
 
-	// configurenginxunit.New(ctx, deploydTopic, &configurenginxunit.Dependencies{
-	// RaftNginxUnitUsecase: jobApp,
-	// })
+	cl := configurenginxunitjob.NewClient(ctx)
+
+	integration := configurenginxunit.New(ctx, deploydTopic, &configurenginxunit.Dependencies{
+		RaftNginxUnitUsecase: cl,
+		RepositoryUsecase:    repositoryUsecase,
+		BuildUsecase:         buildUsecase,
+		BuildArtifactUsecase: buildArtifactUsecase,
+	}, currentHost, config.GetString("nginx-unit.address"))
+
+	subscription, err := deploydTopic.Subscribe(ctx, notifier_impl.NewStandardSubscriber(nil))
+	if err != nil {
+		log.Fatal().Msgf("failed to run subscribe to a topic:  %v", err)
+	}
+
+	integration.Event.StartConsumer(ctx, deploydTopic, subscription)
+
+	router.POST("/job/nginx-unit", integration.Http.SubmitNginxUnitConfig)
 }
 
 func enableSecretdModule(ctx context.Context, router *httprouter.Router, raftStorage *content_badgerraft.BadgerRaftApp) {
