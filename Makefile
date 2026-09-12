@@ -24,7 +24,10 @@ build-user-profile:
 	CGO_ENABLED=0 GOOS=linux go build -o ./archive/user-profile cmd/test/user-profile/*.go
 	tar -czvf user-profile.tar.gz archive
 
-configure: build-user-profile
+build-website:
+	tar -czvf deployd-website.tar.gz www
+
+configure: build-user-profile build-website
 	go run ./cmd/test/configure/*.go
 
 submit-job:
@@ -45,7 +48,7 @@ get-job-website:
 get-job-mb:
 	curl -X GET -H 'X-Namespace: *' 'http://mb1:9600/deployd/job' | jq
 
-test: configure build-user-profile configure submit-job get-job
+test: configure submit-job get-job submit-job-website get-job-website
 
 tail:
 	curl -X GET -H 'X-Namespace: *' 'http://localhost:9401/deployd/job/tail'

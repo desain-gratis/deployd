@@ -31,24 +31,44 @@ func main() {
 	// return
 
 	// tagsStr := strings.Join(tags, ",")
-	data := []*entity.BuildArtifact{{
-		// Id:           "", // important to left this one empty
-		Ns:           "deployd",
-		CommitID:     "heh3h3h3h3",
-		Branch:       "iguana",
-		Actor:        "banana",
-		Tag:          "hey",
-		Data:         json.RawMessage(`{"source": "script"}`),
-		PublishedAt:  time.Now(),
-		Source:       "deployd-script",
-		RepositoryID: "user-profile",          // TODO: make naming consistent :)
-		OsArch:       []string{"linux/amd64"}, // hardcode first
-		URLx:         "",
-		Name:         "raft-chess",
-		Archive: []*common_entity.File{
-			{Id: "linux/amd64", Url: "user-profile.tar.gz"},
+	data := []*entity.BuildArtifact{
+		{
+			// Id:           "", // important to left this one empty
+			Ns:           "deployd",
+			CommitID:     "heh3h3h3h3",
+			Branch:       "iguana",
+			Actor:        "banana",
+			Tag:          "hey",
+			Data:         json.RawMessage(`{"source": "script"}`),
+			PublishedAt:  time.Now(),
+			Source:       "deployd-script",
+			RepositoryID: "user-profile",          // TODO: make naming consistent :)
+			OsArch:       []string{"linux/amd64"}, // hardcode first
+			URLx:         "",
+			Name:         "raft-chess",
+			Archive: []*common_entity.File{
+				{Id: "linux/amd64", Url: "user-profile.tar.gz"},
+			},
 		},
-	}}
+		{
+			// Id:           "", // important to left this one empty
+			Ns:           "deployd",
+			CommitID:     "h4h4h4h4h4",
+			Branch:       "ladybug",
+			Actor:        "orange",
+			Tag:          "henlo",
+			Data:         json.RawMessage(`{"source": "script"}`),
+			PublishedAt:  time.Now(),
+			Source:       "deployd-script",
+			RepositoryID: "deployd-ui",            // TODO: make naming consistent :)
+			OsArch:       []string{"linux/amd64"}, // hardcode first
+			URLx:         "",
+			Name:         "deployd-ui",
+			Archive: []*common_entity.File{
+				{Id: "linux/amd64", Url: "deployd-website.tar.gz"},
+			},
+		},
+	}
 
 	u, err := url.Parse(host + "/artifactd/build")
 	if err != nil {
@@ -115,6 +135,18 @@ func initWithTestData(
 		Id:          "raft-chess",
 		Name:        "Raft chess",
 		Source:      "https://github.com/desain-gratis/raft-chess",
+		URLx:        "",
+		PublishedAt: time.Now(),
+	}, nil)
+	if err != nil {
+		return err
+	}
+
+	_, err = repositoryUsecase.Post(ctx, &entity.Repository{
+		Ns:          "deployd",
+		Id:          "deployd-ui",
+		Name:        "Deployd Website",
+		Source:      "https://github.com/desain-gratis/deployd-ui",
 		URLx:        "",
 		PublishedAt: time.Now(),
 	}, nil)

@@ -168,6 +168,8 @@ func (m *RaftApp) hostResponse(ctx context.Context, request entity.HostUpdateRes
 			currentJob.Status = "ZUCCESS"
 			isSuccessful = true
 			currentJob.FinishedAt = request.Time
+		} else {
+			currentJob.Status = "FAILED"
 		}
 	}
 

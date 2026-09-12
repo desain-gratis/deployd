@@ -5,5 +5,6 @@
 .env
 /user-profile
 /user-profile.tar.gz
+/deployd-website.tar.gz
 /deploy
 /archive
