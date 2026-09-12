@@ -1,4 +1,4 @@
-package configurenginxunit
+package configurewebsite
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/desain-gratis/common/lib/notifier"
 	"github.com/desain-gratis/deployd/src/entity"
 
-	configurenginxunitjob "github.com/desain-gratis/deployd/internal/src/raft-app/configure-nginx-unit"
+	configurewebsite "github.com/desain-gratis/deployd/internal/src/raft-app/configure-website"
 	deployjob "github.com/desain-gratis/deployd/internal/src/raft-app/deploy-job"
 )
 
@@ -42,7 +42,7 @@ type Dependencies struct {
 	RaftJobUsecase *deployjob.Client
 
 	// nginx unit job client
-	RaftNginxUnitUsecase *configurenginxunitjob.Client
+	RaftConfigureWebsite *configurewebsite.Client
 }
 
 // or interface

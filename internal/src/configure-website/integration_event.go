@@ -1,11 +1,11 @@
-package configurenginxunit
+package configurewebsite
 
 import (
 	"context"
 
 	"github.com/desain-gratis/common/lib/notifier"
 
-	deployjob "github.com/desain-gratis/deployd/internal/src/raft-app/deploy-job"
+	configurewebsite "github.com/desain-gratis/deployd/internal/src/raft-app/configure-website"
 )
 
 type eventHandler struct {
@@ -22,8 +22,8 @@ func (w *eventHandler) StartConsumer(ctx context.Context, topic notifier.Topic, 
 			select {
 			case event, _ := <-subscription.Listen():
 				switch value := event.(type) {
-				case deployjob.EventDeploymentJobCreated:
-					w.localWorker.initializeDeployment(topic, value.Job)
+				case configurewebsite.EventJobSubmitted:
+					w.localWorker.configureWebsite(topic, value.Job)
 				default:
 				}
 			case _ = <-ctx.Done():

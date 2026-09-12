@@ -30,9 +30,9 @@ import (
 
 	// raftr "github.com/desain-gratis/common/lib/raft/runner"
 	runneretcd "github.com/desain-gratis/common/lib/raft/runner-etcd"
-	configurenginxunit "github.com/desain-gratis/deployd/internal/src/configure-nginx-unit"
+	configurewebsiteintegration "github.com/desain-gratis/deployd/internal/src/configure-website"
 	deployjobintegration "github.com/desain-gratis/deployd/internal/src/deploy-job"
-	configurenginxunitjob "github.com/desain-gratis/deployd/internal/src/raft-app/configure-nginx-unit"
+	configurewebsite "github.com/desain-gratis/deployd/internal/src/raft-app/configure-website"
 	deployjob "github.com/desain-gratis/deployd/internal/src/raft-app/deploy-job"
 	"github.com/desain-gratis/deployd/internal/src/systemd"
 	"github.com/desain-gratis/deployd/src/deployd"
@@ -359,20 +359,27 @@ func enableNginxUnitConfigModule(ctx context.Context, router *httprouter.Router)
 		log.Fatal().Msgf("UHUY: %v", err)
 	}
 
-	jobApp := configurenginxunitjob.New(deploydTopic, db)
+	jobApp := configurewebsite.New(deploydTopic, db)
 
 	ctx, _, err = runneretcd.RunWithConfig(ctx, config.GetString("raft.etcd_config"), "job-nginx-unit", jobApp)
 	if err != nil {
 		log.Fatal().Msgf("err init raft: %v", err)
 	}
 
-	cl := configurenginxunitjob.NewClient(ctx)
+	jobHandler := mycontentapi.New(
+		jobApp.GetJobStore(),
+		publicBaseURL+"/job/configre-website",
+		[]string{"name"},
+	)
 
-	integration := configurenginxunit.New(ctx, deploydTopic, &configurenginxunit.Dependencies{
-		RaftNginxUnitUsecase: cl,
+	configureWebsiteClient := configurewebsite.NewClient(ctx)
+
+	integration := configurewebsiteintegration.New(ctx, deploydTopic, &configurewebsiteintegration.Dependencies{
+		RaftConfigureWebsite: configureWebsiteClient,
 		RepositoryUsecase:    repositoryUsecase,
 		BuildUsecase:         buildUsecase,
 		BuildArtifactUsecase: buildArtifactUsecase,
+		HostConfigUsecase:    hostConfigUsecase,
 	}, currentHost, config.GetString("nginx-unit.address"))
 
 	subscription, err := deploydTopic.Subscribe(ctx, notifier_impl.NewStandardSubscriber(nil))
@@ -380,9 +387,14 @@ func enableNginxUnitConfigModule(ctx context.Context, router *httprouter.Router)
 		log.Fatal().Msgf("failed to run subscribe to a topic:  %v", err)
 	}
 
+	// dont forget to start explicitly~
+	// todo: evaluate api.. should we make it separate .., or we can automatically start (SubscribeAndStart)
+	subscription.Start()
+
 	integration.Event.StartConsumer(ctx, deploydTopic, subscription)
 
-	router.POST("/job/nginx-unit", integration.Http.SubmitNginxUnitConfig)
+	router.GET("/job/configure-website", jobHandler.Get)
+	router.POST("/job/configure-website/submit", integration.Http.ConfigureWebsite)
 }
 
 func enableSecretdModule(ctx context.Context, router *httprouter.Router, raftStorage *content_badgerraft.BadgerRaftApp) {
