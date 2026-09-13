@@ -14,7 +14,7 @@ job:
     - http://deployd3:21533
   bind_address: deployd1:21531
   join: false
-job-nginx-unit:
+job-website:
   id: 1
   cluster:
     - http://deployd1:21541

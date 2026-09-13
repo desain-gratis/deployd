@@ -354,14 +354,14 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 }
 
 func enableNginxUnitConfigModule(ctx context.Context, router *httprouter.Router) {
-	db, err := badger.Open(badger.DefaultOptions(config.GetString("storage.file.job-nginx-unit-data")))
+	db, err := badger.Open(badger.DefaultOptions(config.GetString("storage.file.job-website-data")))
 	if err != nil {
 		log.Fatal().Msgf("UHUY: %v", err)
 	}
 
 	jobApp := configurewebsite.New(deploydTopic, db)
 
-	ctx, _, err = runneretcd.RunWithConfig(ctx, config.GetString("raft.etcd_config"), "job-nginx-unit", jobApp)
+	ctx, _, err = runneretcd.RunWithConfig(ctx, config.GetString("raft.etcd_config"), "job-website", jobApp)
 	if err != nil {
 		log.Fatal().Msgf("err init raft: %v", err)
 	}
