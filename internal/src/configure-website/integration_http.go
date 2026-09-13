@@ -47,11 +47,16 @@ func (h *httpHandler) ConfigureWebsite(w http.ResponseWriter, r *http.Request, p
 		hostByName[host.Host] = host
 	}
 
-	req.TargetHosts = make([]string, 0)
-	for _, host := range allHosts {
-		req.TargetHosts = append(req.TargetHosts, host.Host)
+	req.TargetHosts = hostByName
+
+	// populate requested data
+
+	listenAddress := make(map[string]string)
+	for _, host := range hostByName {
+		listenAddress[host.Host] = host.InternalAddress + ":80" // todo: later can be customized~
 	}
 
+	req.ListenAddress = listenAddress
 	req.Time = time.Now()
 
 	result, err := h.dependencies.RaftConfigureWebsite.ConfigureWebsite(ctx, req)

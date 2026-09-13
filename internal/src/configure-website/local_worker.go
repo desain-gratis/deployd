@@ -50,7 +50,7 @@ type HostDeploymentJobState struct {
 	RestartServiceStatus entity.HostRestartServiceStatus `json:"restart_service_status"`
 }
 
-func (w *localWorker) configureWebsite(out notifier.Topic, jobDefinition *entity.JobConfigureWebsite) error {
+func (w *localWorker) configureWebsite(_ notifier.Topic, jobDefinition *entity.JobConfigureWebsite) error {
 	log := w.log
 
 	if jobDefinition == nil {
@@ -97,7 +97,7 @@ func (w *localWorker) configureWebsite(out notifier.Topic, jobDefinition *entity
 		return fmt.Errorf("failed to download website: %w", err)
 	}
 
-	err = w.updateNginxUnit(websiteDir)
+	err = w.updateNginxUnit(websiteDir, jobDefinition)
 	if err != nil { // TODO: make proper
 		return fmt.Errorf("failed updating nginx unit config: %w", err)
 	}
@@ -107,48 +107,58 @@ func (w *localWorker) configureWebsite(out notifier.Topic, jobDefinition *entity
 
 func (w *localWorker) downloadWebsite(ctx context.Context, websiteDir string, jobDefinition *entity.JobConfigureWebsite) error {
 	// create temporariy dir
-	downloadLocation := "/tmp/configure-website/" + jobDefinition.Request.RepositoryID + "/artifact_" + jobDefinition.Request.BuildID + ".tar.gz"
+	downloadLocation := "/tmp/configure-website/job-" + jobDefinition.Id + ".tar.gz"
 
 	err := ensureDir("/tmp/configure-website/" + jobDefinition.Request.RepositoryID)
 	if err != nil {
 		return fmt.Errorf("error while ensureing dir file %w", err)
 	}
 
+	osarch := fmt.Sprintf("%s/%s", w.host.OS, w.host.Architecture)
+
+	var sourceArtifact io.ReadCloser
+
+	if jobDefinition.Request.FromUrl != nil {
+		sourceArtifact, err = openFromUrl(*jobDefinition.Request.FromUrl)
+	} else {
+		sourceArtifact, _, err = w.dependencies.BuildArtifactUsecase.GetAttachment(
+			ctx,
+			jobDefinition.Ns,
+			[]string{jobDefinition.Request.RepositoryID, jobDefinition.Request.BuildID},
+			osarch, // attachment can have one to many, so we're restricting to one
+		)
+		if err != nil {
+			err = fmt.Errorf("error while getting build artifact attachment: for ns=%v repository id=%v build id=%v os/arch=%v : %w",
+				jobDefinition.Ns,
+				jobDefinition.Request.RepositoryID,
+				jobDefinition.Request.BuildID,
+				osarch,
+				err,
+			)
+		}
+	}
+	if err != nil {
+		return err
+	}
+	defer sourceArtifact.Close()
+
+	// target file
 	f, err := os.OpenFile(downloadLocation, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return fmt.Errorf("error while opening tmp archive file %w", err)
 	}
 	defer f.Close()
 
-	osarch := fmt.Sprintf("%s/%s", w.host.OS, w.host.Architecture)
-
-	buildArtifact, meta, err := w.dependencies.BuildArtifactUsecase.GetAttachment(
-		ctx,
-		jobDefinition.Ns,
-		[]string{jobDefinition.Request.RepositoryID, jobDefinition.Request.BuildID},
-		osarch, // attachment can have one to many, so we're restricting to one
-	)
-	if err != nil {
-		return fmt.Errorf("error while getting build artifact attachment: for ns=%v repository id=%v build id=%v os/arch=%v : %w",
-			jobDefinition.Ns,
-			jobDefinition.Request.RepositoryID,
-			jobDefinition.Request.BuildID,
-			osarch,
-			err,
-		)
-	}
-	defer buildArtifact.Close()
-
 	// Download
-	total, err := Copy(ctx, f, buildArtifact)
+	_, err = Copy(ctx, f, sourceArtifact)
 	if err != nil {
 		return fmt.Errorf("error while writing artifact file %w", err)
 	}
 
-	if meta.ContentSize != uint64(total) {
-		// maybe check hash
-		return fmt.Errorf("download file size not matching! expected %v got %v", meta.ContentSize, total)
-	}
+	// if meta.ContentSize != uint64(total) {
+	// 	// maybe check hash
+	// 	return fmt.Errorf("download file size not matching! expected %v got %v", meta.ContentSize, total)
+	// }
 
 	err = utility.ExtractTarGzStrip(downloadLocation, websiteDir)
 	if err != nil {
@@ -158,16 +168,29 @@ func (w *localWorker) downloadWebsite(ctx context.Context, websiteDir string, jo
 	return nil
 }
 
-func (w *localWorker) updateNginxUnit(targetDir string) error {
+func (w *localWorker) updateNginxUnit(targetDir string, jobDefinition *entity.JobConfigureWebsite) error {
 
 	// 1. Define the path to NGINX Unit's control socket
 	// Common paths: "/var/run/unit/control.sock" or "/var/run/control.unit.sock"
 	socketPath := "/var/run/unit/control.sock"
+	listenAddress := jobDefinition.Request.ListenAddress[w.host.Host]
+
+	// todo: more thorough validation~
+	if listenAddress == "" {
+		return fmt.Errorf("empty listen address")
+	}
+
+	notFoundPage := targetDir + "/404.html"
+	if jobDefinition.Request.Custom404Page != "" {
+		notFoundPage = jobDefinition.Request.Custom404Page
+	}
+
+	// TODO: match clauses in route
 
 	// 2. Define your NGINX Unit configuration JSON
 	configJSON := []byte(`{
 		"listeners": {
-			"` + w.host.InternalAddress + `:80": {
+			"` + listenAddress + `": {
 				"pass": "routes"
 			}
 		},
@@ -176,7 +199,7 @@ func (w *localWorker) updateNginxUnit(targetDir string) error {
 				"action": {
 					"share": "` + targetDir + `$uri",
 					"fallback": {
-                    	"share": "/var/www/html/404.html",
+                    	"share": "` + notFoundPage + `",
                     	"response": {
                         	"status": 404,
                         	"headers": {
@@ -259,4 +282,17 @@ func Copy(ctx context.Context, dst io.Writer, src io.Reader) (int, error) {
 
 func ensureDir(dir string) error {
 	return os.MkdirAll(dir, 0755)
+}
+
+func openFromUrl(url string) (io.ReadCloser, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to make request: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Server returned status: %s", resp.Status)
+	}
+
+	return resp.Body, nil
 }

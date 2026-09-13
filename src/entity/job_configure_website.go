@@ -56,8 +56,17 @@ type ConfigureWebsiteRequest struct {
 	// build ID
 	BuildID string `json:"build_id"`
 
-	// The host which the configuration will be applied
-	TargetHosts []string `json:"target_hosts"`
+	// Will ignore aritfactd repository ID & build id, will open from this URL instead
+	// Currently only support tar.gz archive.
+	FromUrl *string `json:"from_url,omitempty"`
+
+	// Captured host info in which the configuration will be applied
+	TargetHosts map[string]*Host `json:"target_hosts"`
+
+	// <host>:<port> from target hosts
+	ListenAddress map[string]string `json:"listen_address"`
+
+	Custom404Page string `json:"custom_404_page"`
 
 	Time time.Time `json:"time"`
 }
