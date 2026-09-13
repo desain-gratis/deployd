@@ -1,24 +1,25 @@
-deployd:
-  id: 2
-  cluster:
-    - http://deployd1:21521
-    - http://deployd2:21522
-    - http://deployd3:21523
-  bind_address: deployd2:21522
-  join: false
-job:
-  id: 2
-  cluster:
-    - http://deployd1:21531
-    - http://deployd2:21532
-    - http://deployd3:21533
-  bind_address: deployd2:21532
-  join: false
-job-website:
-  id: 2
-  cluster:
-    - http://deployd1:21541
-    - http://deployd2:21542
-    - http://deployd3:21543
-  bind_address: deployd2:21542
-  join: false
+node_id: 2
+base_wal_dir: "/wal/deployd"
+base_data_dir: "/data/deployd"
+replica:
+  deployd:
+    cluster:
+      - http://deployd1:21521
+      - http://deployd2:21522
+      - http://deployd3:21523
+    bind_address: deployd2:21522
+    join: false
+  job:
+    cluster:
+      - http://deployd1:21531
+      - http://deployd2:21532
+      - http://deployd3:21533
+    bind_address: deployd2:21532
+    join: false
+  job-website:
+    cluster:
+      - http://deployd1:21541
+      - http://deployd2:21542
+      - http://deployd3:21543
+    bind_address: deployd2:21542
+    join: false

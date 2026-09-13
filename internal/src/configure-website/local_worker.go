@@ -171,8 +171,8 @@ func (w *localWorker) downloadWebsite(ctx context.Context, websiteDir string, jo
 func (w *localWorker) updateNginxUnit(targetDir string, jobDefinition *entity.JobConfigureWebsite) error {
 
 	// 1. Define the path to NGINX Unit's control socket
-	// Common paths: "/var/run/unit/control.sock" or "/var/run/control.unit.sock"
-	socketPath := "/var/run/unit/control.sock"
+	// todo: configurable
+	socketPath := "/var/run/control.unit.sock"
 	listenAddress := jobDefinition.Request.ListenAddress[w.host.Host]
 
 	// todo: more thorough validation~
