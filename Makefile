@@ -14,10 +14,10 @@ clean:
 build:
 	go test -v ./internal/... ./src/...
 	CGO_ENABLED=0 GOOS=linux go build -o deployd cmd/deployd/*.go
-	docker build --pull=false --network=none -t deployd .
+	docker build --pull=false --network=host -t deployd .
 
 run:
-	docker compose up
+	docker compose up --force-recreate
 
 build-user-profile:
 	mkdir -p archive
@@ -36,6 +36,9 @@ submit-job:
 submit-job-website:
 	curl -X POST -H 'X-Namespace: *' 'http://localhost:9401/job/configure-website/submit' -d'@configure-website.json'  | jq
 
+submit-job-website-from-url:
+	curl -X POST -H 'X-Namespace: *' 'http://localhost:9401/job/configure-website/submit' -d'@configure-website-from-url.json'  | jq
+
 submit-job-mb:
 	curl -X POST -H 'X-Namespace: *' 'http://mb1:9600/deployd/submit-job' -d'@submit-sample-mb.json' | jq
 
@@ -48,7 +51,7 @@ get-job-website:
 get-job-mb:
 	curl -X GET -H 'X-Namespace: *' 'http://mb1:9600/deployd/job' | jq
 
-test: configure submit-job get-job submit-job-website get-job-website
+test: configure submit-job get-job submit-job-website submit-job-website-from-url get-job-website 
 
 tail:
 	curl -X GET -H 'X-Namespace: *' 'http://localhost:9401/deployd/job/tail'

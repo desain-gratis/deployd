@@ -14,10 +14,8 @@ services:
     volumes:
       - ./config/deployd:/etc/deployd
       - ./config/deployd/raft/raft-0.yaml:/etc/deployd/etcd-raft.yaml
-      - ./www:/var/www
       - ./tmp1/data/data-1:/data
       - ./tmp1/dbus:/dbus
-      - ./tmp1/etc:/etc
       - ./tmp1/opt:/opt
       - ./tmp1/tmp/:/tmp
       - ./tmp1/systemd/:/etc/systemd/system/
@@ -42,10 +40,8 @@ services:
     volumes:
       - ./config/deployd:/etc/deployd
       - ./config/deployd/raft/raft-1.yaml:/etc/deployd/etcd-raft.yaml
-      - ./www:/var/www
       - ./tmp2/data/data-2:/data
       - ./tmp2/dbus:/dbus
-      - ./tmp2/etc:/etc
       - ./tmp2/opt:/opt
       - ./tmp2/tmp/:/tmp
       - ./tmp2/systemd/:/etc/systemd/system/
@@ -70,10 +66,8 @@ services:
     volumes:
       - ./config/deployd:/etc/deployd
       - ./config/deployd/raft/raft-2.yaml:/etc/deployd/etcd-raft.yaml
-      - ./www:/var/www
       - ./tmp3/data/data-3:/data
       - ./tmp3/dbus:/dbus
-      - ./tmp3/etc:/etc
       - ./tmp3/opt:/opt
       - ./tmp3/tmp/:/tmp
       - ./tmp3/systemd/:/etc/systemd/system/

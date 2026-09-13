@@ -1,5 +1,8 @@
-# Stage 2: Create a minimal image for running the application
 FROM alpine:latest
+
+# Allow hit https endpoint from inside 
+RUN apk --no-cache add ca-certificates
+RUN update-ca-certificates
 
 # important for cleanly closing connection
 STOPSIGNAL SIGINT
