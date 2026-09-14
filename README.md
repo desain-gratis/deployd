@@ -40,7 +40,7 @@ The service definition is:
 Download the latest release from GitHub.
 
 ```bash
-wget https://github.com/desain-gratis/deployd/releases/download/v0.0.1/deployd-linux-amd64.tar.gz
+wget https://github.com/desain-gratis/deployd/releases/download/v0.0.5/deployd-linux-amd64.tar.gz
 ```
 
 ---
@@ -119,6 +119,8 @@ storage:
   file:
     config-data: "/data/deployd/config.db"
     job-data: "/data/deployd/job.db"
+    job-website-data: "/data/deployd/job-website-data.db"
+
 EOF
 
 ```
@@ -159,22 +161,31 @@ Etcd raft is what makes this a distributed application.
 
 ```bash
 sudo tee /etc/deployd/etcd-raft.yaml >/dev/null <<'EOF'
-deployd:
-  id: 1
-  cluster:
-    - http://host1:21521
-    - http://host2:21521
-    - http://host3:21521
-  bind_address: 100.0.0.1:21521
-  join: false
-job:
-  id: 1
-  cluster:
-    - http://host1:21531
-    - http://host2:21531
-    - http://host3:21531
-  bind_address: 100.0.0.1:21531
-  join: false
+node_id: 1
+base_wal_dir: "/wal/deployd"
+base_data_dir: "/data/deployd"
+replica:
+  deployd:
+    cluster:
+      - http://host1:21521
+      - http://host2:21522
+      - http://host3:21523
+    bind_address: 100.0.0.1:21521
+    join: false
+  job:
+    cluster:
+      - http://host1:21531
+      - http://host2:21532
+      - http://host3:21533
+    bind_address: 100.0.0.1:21531
+    join: false
+  job-website:
+    cluster:
+      - http://host1:21541
+      - http://host2:21542
+      - http://host3:21543
+    bind_address: 100.0.0.1:21541
+    join: false
 
 EOF
 ```
