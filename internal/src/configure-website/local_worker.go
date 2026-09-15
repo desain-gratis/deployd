@@ -199,13 +199,7 @@ func (w *localWorker) updateNginxUnit(targetDir string, jobDefinition *entity.Jo
 				"action": {
 					"share": "` + targetDir + `$uri",
 					"fallback": {
-                    	"share": "` + notFoundPage + `",
-                    	"response": {
-                        	"status": 404,
-                        	"headers": {
-                            	"Content-Type": "text/html"
-                        	}
-                    	}
+                    	"share": "` + notFoundPage + `"
                 	}
 				}
 			}
