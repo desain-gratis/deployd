@@ -61,14 +61,14 @@ type ConfigureWebsiteRequest struct {
 	FromUrl *string `json:"from_url,omitempty"`
 
 	// Captured host info in which the configuration will be applied
-	TargetHosts map[string]*Host `json:"target_hosts"`
+	TargetHosts map[string]*Host `json:"target_hosts,omitempty"`
 
 	// <host>:<port> from target hosts
-	ListenAddress map[string]string `json:"listen_address"`
+	ListenAddress map[string]string `json:"listen_address,omitempty"`
 
-	Custom404Page string `json:"custom_404_page"`
+	Custom404Page string `json:"custom_404_page,omitempty"`
 
-	Time time.Time `json:"time"`
+	Time time.Time `json:"time,omitempty"`
 }
 
 type JobConfigureWebsite struct {

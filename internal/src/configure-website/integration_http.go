@@ -26,14 +26,14 @@ func (h *httpHandler) ConfigureWebsite(w http.ResponseWriter, r *http.Request, p
 	limitR := http.MaxBytesReader(w, r.Body, 100000000)
 	payload, err := io.ReadAll(limitR)
 	if err != nil {
-		fmt.Fprintf(w, `{"error": "failed to parse data"}`) // TODO: more appropriate
+		fmt.Fprintf(w, `{"error": "failed to parse data during read"}`) // TODO: more appropriate
 		return
 	}
 
 	var req entity.ConfigureWebsiteRequest
 	err = json.Unmarshal(payload, &req)
 	if err != nil {
-		fmt.Fprintf(w, `{"error": "failed to parse data"}`) // TODO: more appropriate
+		fmt.Fprintf(w, "{\"error\": \"failed to parse data during unmarshal: %v\"}", err) // TODO: more appropriate
 		return
 	}
 
