@@ -48,32 +48,3 @@ jobs:
           name: deployd-archive
           path: dist/
           if-no-files-found: error
-
-  deploy:
-    needs: [build]     # <<< ensures job waits for build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: deployd-archive
-          path: deploy-artifact
-
-      - name: Show downloaded files (debug)
-        run: ls -R deploy-artifact
-
-      - name: Tailscale
-        uses: tailscale/github-action@v4
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:desain-gratis-ci
-
-      - name: Upload artifactd & metadata to private deployd repository
-        uses: desain-gratis/deployd-gh-action@v1
-        with:
-          url: http://mb1:9600
-          namespace: deployd
-          name: user-profile
-          archive: deploy-artifact
