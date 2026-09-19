@@ -591,22 +591,23 @@ func configureRaft(log *slog.Logger, raftPath string, currentHost *entity.Host, 
 			join = rcfg.Join
 		}
 
-		e.Set(fmt.Sprintf("%s.id", replicakey), id)                              // hostIdx                           // host index as specified in the job's Target
-		e.Set(fmt.Sprintf("%s.cluster", replicakey), cluster)                    // http://<host>:<port>
-		e.Set(fmt.Sprintf("%s.bind_address", replicakey), currentClusterAddress) // for this service, this is the agreed bind address <host>:<port>
-		e.Set(fmt.Sprintf("%s.join", replicakey), join)                          // for this service, this is the agreed bind address <host>:<port>
+		e.Set("node_id", id)
 		e.Set(
-			fmt.Sprintf("%s.wal_dir", replicakey),
+			"base_wal_dir",
 			fmt.Sprintf(
 				"%s/%s_%s/etcd-raft-replica/%s/wal", currentHost.RaftConfig.BaseWALDir, job.Ns, job.Request.Service.Id, replicakey,
 			),
 		)
 		e.Set(
-			fmt.Sprintf("%s.snap_dir", replicakey),
+			"base_data_dir",
 			fmt.Sprintf(
 				"%s/%s_%s/etcd-raft-replica/%s/snap", currentHost.RaftConfig.BaseNodeHostDir, job.Ns, job.Request.Service.Id, replicakey,
 			),
 		)
+
+		e.Set(fmt.Sprintf("replica.%s.cluster", replicakey), cluster)                    // http://<host>:<port>
+		e.Set(fmt.Sprintf("replica.%s.bind_address", replicakey), currentClusterAddress) // for this service, this is the agreed bind address <host>:<port>
+		e.Set(fmt.Sprintf("replica.%s.join", replicakey), join)                          // for this service, this is the agreed bind address <host>:<port>
 	}
 
 	err = e.WriteConfigTo(etcdf)
