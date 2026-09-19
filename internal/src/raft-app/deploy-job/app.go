@@ -263,8 +263,8 @@ func (m *RaftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploy
 	for _, replica := range request.EtcdRaftReplicas {
 		raftEtcdConfig[replica] = entity.EtcdRaftReplicaConfig{
 			// assigned port within the cluster internal address
-			AssignedPort: randomPort(), // ofcors todo add avaoid conflict logic
-			Join:         false,        // todo: calculated with last successful job
+			AssignedPort: request.RaftPort,
+			Join:         false, // todo: calculated with last successful job
 		}
 	}
 
