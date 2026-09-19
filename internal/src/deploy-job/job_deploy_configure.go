@@ -571,16 +571,17 @@ func configureRaft(log *slog.Logger, raftPath string, currentHost *entity.Host, 
 		var id int
 		var cluster []string
 		for idx, target := range job.Target {
+			hostPort := fmt.Sprintf("%s:%d", target.InternalAddress, replica.AssignedPort)
 			ur := &url.URL{
 				Scheme: "http",
-				Host:   fmt.Sprintf("%s:%d", target.InternalAddress, replica.AssignedPort),
+				Host:   hostPort,
 			}
 			addr := ur.String()
 			cluster = append(cluster, addr)
 
 			if target.InternalAddress == hostc.InternalAddress {
 				// todo: might need to allow overwrite; but for now keeping it simple
-				currentClusterAddress = addr
+				currentClusterAddress = hostPort
 				id = idx + 1
 			}
 		}
