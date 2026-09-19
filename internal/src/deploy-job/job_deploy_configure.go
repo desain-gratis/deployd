@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/v22/dbus"
+	"github.com/desain-gratis/common/delivery/mycontent-api/mycontent"
 	"github.com/desain-gratis/deployd/src/entity"
 	"github.com/spf13/viper"
 )
@@ -154,15 +155,14 @@ func (a *configureHost) Execute() error {
 
 	err = func() error {
 		envData, err := a.dependencies.EnvUsecase.Get(ctx, a.Job.Request.Ns, []string{a.Job.Request.Service.Id}, strconv.FormatUint(a.Job.Request.EnvVersion, 10))
-		if err != nil {
+		if err != nil && !errors.Is(err, mycontent.ErrNotFound) {
 			return fmt.Errorf("error while downloading env %w", err)
 		}
 
-		if len(envData) == 0 {
-			return nil
+		env := &entity.Env{}
+		if len(envData) > 0 {
+			env = envData[0]
 		}
-
-		env := envData[0]
 
 		buildData, err := a.dependencies.BuildUsecase.Get(
 			ctx,
@@ -228,15 +228,14 @@ func (a *configureHost) Execute() error {
 	err = func() error {
 		// TODOOOOOOOOO: versioned  HOW TO GET
 		secretData, err := a.dependencies.SecretUsecase.Get(ctx, a.Job.Request.Ns, []string{a.Job.Request.Service.Id}, strconv.FormatUint(a.Job.Request.SecretVersion, 10))
-		if err != nil {
-			return fmt.Errorf("error while downloading env %w", err)
+		if err != nil && !errors.Is(err, mycontent.ErrNotFound) {
+			return fmt.Errorf("error while downloading secret %w", err)
 		}
 
-		if len(secretData) == 0 {
-			return nil
+		secret := &entity.Secret{}
+		if len(secretData) > 0 {
+			secret = secretData[0]
 		}
-
-		secret := secretData[0]
 
 		type kv struct {
 			key string
