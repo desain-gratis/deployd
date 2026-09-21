@@ -105,6 +105,16 @@ func (h *httpHandler) SubmitJob(w http.ResponseWriter, r *http.Request, p httpro
 
 	dj.RaftPort = RandomPort()
 
+	// server side edit request
+	dj.EtcdRaftReplicasServerConfig = make([]entity.EtcdRaftReplicaConfig, len(dj.EtcdRaftReplicas))
+	for idx, replica := range dj.EtcdRaftReplicas {
+		dj.EtcdRaftReplicasServerConfig[idx] = entity.EtcdRaftReplicaConfig{
+			Id:           replica,
+			AssignedPort: RandomPort(),
+			Join:         false, // TODO
+		}
+	}
+
 	modifySecret := "generate secret"
 	dj.ModifyKey = &modifySecret // TODO: nice to have; only user that have the secret can update this state
 	// or authorized at higher level (eg. based on namespace); but this one of the basic tool we can use

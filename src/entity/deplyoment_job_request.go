@@ -31,8 +31,9 @@ type SubmitDeploymentJobRequest struct {
 	RaftPortMapping  map[string]uint16          `json:"raft_port_mapping,omitempty"` // optional if at each host, the port is different
 	RaftDeploymentID uint64                     `json:"raft_deployment_id"`
 
-	// ETCDMAXXING
-	EtcdRaftReplicas []string `json:"etcd_raft_replicas"`
+	// ETCDMAXXING (todo remove this, just use replciasconfig)
+	EtcdRaftReplicas             []string                `json:"etcd_raft_replicas"`               // got from user
+	EtcdRaftReplicasServerConfig []EtcdRaftReplicaConfig `json:"etcd_raft_replicas_server_config"` // determined
 
 	ModifyKey *string `json:"-"` // hidden; TODO: to be nice, to lock, only the one who have this key can modify the state.
 
@@ -52,6 +53,7 @@ type SubmitDeploymentJobRequest struct {
 }
 
 type EtcdRaftReplicaConfig struct {
+	Id           string `json:"id"`
 	AssignedPort uint16 `json:"assigned_port"`
 	Join         bool   `json:"join"`
 }

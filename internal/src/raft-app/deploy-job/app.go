@@ -260,11 +260,12 @@ func (m *RaftApp) userSubmitJob(ctx context.Context, request entity.SubmitDeploy
 
 	// ETCD
 	raftEtcdConfig := make(map[string]entity.EtcdRaftReplicaConfig)
-	for _, replica := range request.EtcdRaftReplicas {
-		raftEtcdConfig[replica] = entity.EtcdRaftReplicaConfig{
+	for _, replica := range request.EtcdRaftReplicasServerConfig {
+		raftEtcdConfig[replica.Id] = entity.EtcdRaftReplicaConfig{
 			// assigned port within the cluster internal address
-			AssignedPort: request.RaftPort,
-			Join:         false, // todo: calculated with last successful job
+			Id:           replica.Id,
+			AssignedPort: replica.AssignedPort,
+			Join:         replica.Join, // todo: calculated with last successful job
 		}
 	}
 
