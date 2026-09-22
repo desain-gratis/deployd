@@ -13,7 +13,9 @@ type Repository struct {
 	Ns          string    `json:"namespace"`
 	Name        string    `json:"name"`
 	Source      string    `json:"source"`
+	Description string    `json:"description"`
 	PublishedAt time.Time `json:"published_at"`
+	SourceURL   string    `json:"source_url"`
 	URLx        string    `json:"url"`
 
 	// TODO: generate API KEY / API SECRET to validate archive upload in /secretd
