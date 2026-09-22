@@ -35,23 +35,16 @@ The service definition is:
 
 ---
 
-## 1. Download the Release
+## 1. Download the Release & extract
 
 Download the latest release from GitHub.
 
 ```bash
-wget https://github.com/desain-gratis/deployd/releases/download/v0.0.5/deployd-linux-amd64.tar.gz
-```
+wget https://github.com/desain-gratis/deployd/releases/download/v0.0.16/deployd-linux-amd64.tar.gz -O deployd-linux-amd64.tar.gz && \
+sudo mkdir -p /opt/deployd && \
+sudo tar -xzf deployd-linux-amd64.tar.gz -C /opt/deployd && \
+sudo chmod +x /opt/deployd/deployd
 
----
-
-## 2. Extract the Archive
-
-Extract the release into the deployment directory.
-
-```bash
-sudo mkdir -p /opt/deployd
-sudo tar -xzf deployd-linux-amd64.tar.gz -C /opt/deployd
 ```
 
 The resulting layout should look like:
@@ -61,25 +54,24 @@ The resulting layout should look like:
 └── deployd
 ```
 
-Make the executable runnable:
-
-```bash
-sudo chmod +x /opt/deployd/deployd
-```
-
 ---
 
-## 3. Create the Config & Environment File
-
+## 2. Create the Environment and Secret File Placeholder
 
 ```bash
 sudo mkdir -p /etc/deployd
+
 sudo tee /etc/deployd/overwrite.env >/dev/null <<'EOF'
 CONFIG=/etc/deployd/config.yaml
 SECRET=/etc/deployd/secret.yaml
 EOF
 
+sudo tee /etc/deployd/secret.yaml >/dev/null <<'EOF'
+
+EOF
 ```
+
+## 3. Create the config file
 
 Next, create the config. Please adjust it according to your own host information. Explanation below the example.
 
@@ -144,18 +136,7 @@ Hosts:
 * hostname = host2, hostname_internal_ip = 100.0.0.2, host_id: 2
 * hostname = host3, hostname_internal_ip = 100.0.0.3, host_id: 3
 
-
-## 4. Create the Secret File
-
-They can be used to overwrite config.yaml with secret. (but now it's not used)
-
-```bash
-sudo tee /etc/deployd/secret.yaml >/dev/null <<'EOF'
-
-EOF
-```
-
-## 5. Create the Etcd Raft File
+## 4. Create the Etcd Raft config file
 
 Etcd raft is what makes this a distributed application.
 
@@ -190,8 +171,7 @@ replica:
 EOF
 ```
 
-
-## 6. Create the systemd Service
+## 5. Create the systemd Service
 
 ```bash
 sudo tee /etc/systemd/system/deployd.service >/dev/null <<'EOF'
@@ -215,22 +195,10 @@ EOF
 
 ## 6. Enable the Service
 
-Reload systemd:
+Reload systemd daemon, enable to run on server start up, and start deployd
 
 ```bash
-sudo systemctl daemon-reload
-```
-
-Enable deployd to start automatically:
-
-```bash
-sudo systemctl enable deployd
-```
-
-Start it:
-
-```bash
-sudo systemctl start deployd
+sudo systemctl daemon-reload && sudo systemctl enable deployd && sudo systemctl start deployd
 ```
 
 ---
