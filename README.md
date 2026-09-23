@@ -8,10 +8,12 @@ This guide describes how to manually install **deployd** as a systemd service.
 
 ## Requirements
 
-* Linux x86_64 (amd64)
-* systemd
+Tested for Ubuntu.
+
 * Root or sudo access
 * 3 hosts/PC in with private static internal IP
+* cloudflared
+* nginx unit
 
 ## Directory Layout
 
@@ -87,9 +89,9 @@ host:
 # base raft configuration for deployed apps
 raft:
   replica_id: 1
-  base_node_host_dir: "/data"
-  base_wal_dir: "/data"
-  etcd_config: "/etc/deployd/etcd-raft.yaml"
+  base_node_host_dir: /data
+  base_wal_dir: /data
+  etcd_config: /etc/deployd/etcd-raft.yaml
 
 http:
   public:
@@ -97,7 +99,7 @@ http:
     fqdn: http://host1.com:9401
 
 ui:
-  dir: "/var/www"
+  dir: /var/www
 
 storage:
   s3:
@@ -109,9 +111,9 @@ storage:
       bucket_name: <s3 bucket name>
       base_public_url: <public accessible URL of the bucket>
   file:
-    config-data: "/data/deployd/config.db"
-    job-data: "/data/deployd/job.db"
-    job-website-data: "/data/deployd/job-website-data.db"
+    config-data: /data/deployd/config.db
+    job-data: /data/deployd/job.db
+    job-website-data: /data/deployd/job-website-data.db
 
 EOF
 
@@ -143,8 +145,8 @@ Etcd raft is what makes this a distributed application.
 ```bash
 sudo tee /etc/deployd/etcd-raft.yaml >/dev/null <<'EOF'
 node_id: 1
-base_wal_dir: "/wal/deployd"
-base_data_dir: "/data/deployd"
+base_wal_dir: /wal
+base_data_dir: /data
 replica:
   deployd:
     cluster:
