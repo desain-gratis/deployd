@@ -313,13 +313,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 
 	handler := notifier_api.NewTopicAPI(deploydTopic)
 	// websocket version
-	wsWhitelist := []string{
-		"http://localhost:*", "http://localhost",
-		"http://mb1:*", "http://mb2:*", "http://mb3:*",
-		"http://mb1", "http://mb2", "http://mb3",
-		"http://hz1:*", "http://hz2:*", "http://hz3:*",
-		"http://hz1", "http://hz2", "http://hz3",
-	}
+	wsWhitelist := config.GetStringSlice("http.public.whitelist")
 
 	// job read; non-websocket version
 	router.GET("/deployd/job/stat", handler.Metrics)

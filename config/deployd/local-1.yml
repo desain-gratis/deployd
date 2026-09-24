@@ -16,6 +16,9 @@ http:
   public:
     address: ":9600"
     fqdn: http://localhost:9401
+    whitelist:
+      - http://localhost
+      - http://localhost:*
 
 ui:
   dir: "/var/www"
