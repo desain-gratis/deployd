@@ -34,6 +34,7 @@ import (
 	deployjobintegration "github.com/desain-gratis/deployd/internal/src/deploy-job"
 	configurewebsite "github.com/desain-gratis/deployd/internal/src/raft-app/configure-website"
 	deployjob "github.com/desain-gratis/deployd/internal/src/raft-app/deploy-job"
+	multi "github.com/desain-gratis/deployd/internal/src/raft-app/multi"
 	"github.com/desain-gratis/deployd/internal/src/systemd"
 	"github.com/desain-gratis/deployd/src/deployd"
 	"github.com/desain-gratis/deployd/src/entity"
@@ -72,8 +73,9 @@ var (
 
 	buildArtifactUsecase *mycontent_base.HandlerWithAttachment
 
-	// deploy job client
-	raftDeployjobUsecase *deployjob.Client
+	// raft clients
+	raftDeployJobClient        *deployjob.Client
+	raftConfigureWebsiteClient *configurewebsite.Client
 
 	deploydTopic notifier.Topic
 )
@@ -160,7 +162,6 @@ func main() {
 	// It can also exposes mycontent datastore for easy access (read only).
 	// All write command are managed by the application
 	enableJobModule(ctx, router)
-	enableNginxUnitConfigModule(ctx, router)
 
 	enableUI(ctx, router)
 
@@ -250,8 +251,14 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	}
 
 	jobApp := deployjob.New(deploydTopic, db)
+	webApp := configurewebsite.New(deploydTopic, db)
 
-	ctx, _, err = runneretcd.RunWithConfig(ctx, config.GetString("raft.etcd_config"), "job", jobApp)
+	// multi allows multiple app in a single raft replica
+	ctx, _, err = runneretcd.RunWithConfig(
+		ctx,
+		config.GetString("raft.etcd_config"), "job",
+		multi.New(jobApp, webApp),
+	)
 	if err != nil {
 		log.Fatal().Msgf("err init raft: %v", err)
 	}
@@ -281,7 +288,16 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 		nil,
 	)
 
-	raftDeployjobUsecase = deployjob.NewClient(ctx)
+	webHandler := mycontentapi.New(
+		webApp.GetJobStore(),
+		publicBaseURL+"/job/configure-website",
+		[]string{"name"},
+	)
+
+	raftDeployJobClient = deployjob.NewClient(ctx)
+	raftConfigureWebsiteClient = configurewebsite.NewClient(ctx)
+
+	// Integrations
 
 	integration := deployjobintegration.New(
 		ctx,
@@ -292,7 +308,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 			RepositoryUsecase:        repositoryUsecase,
 			EnvUsecase:               envUsecase,
 			SecretUsecase:            secretUsecase,
-			RaftJobUsecase:           raftDeployjobUsecase,
+			RaftJobUsecase:           raftDeployJobClient,
 			BuildArtifactUsecase:     buildArtifactUsecase,
 			JobUsecase:               jobUsecase,
 			RoutingUsecase:           routingUsecase,
@@ -300,6 +316,16 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 		},
 		currentHost,
 	)
+
+	webIntegration := configurewebsiteintegration.New(ctx, deploydTopic, &configurewebsiteintegration.Dependencies{
+		RaftConfigureWebsite: raftConfigureWebsiteClient,
+		RepositoryUsecase:    repositoryUsecase,
+		BuildUsecase:         buildUsecase,
+		BuildArtifactUsecase: buildArtifactUsecase,
+		HostConfigUsecase:    hostConfigUsecase,
+	}, currentHost, config.GetString("nginx-unit.address"))
+
+	// HTTP handlers
 
 	router.POST("/deployd/submit-job", integration.Http.SubmitJob)
 	router.POST("/deployd/job/:service/:id/cancel", integration.Http.CancelJob)
@@ -309,7 +335,13 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	router.GET("/deployd/job/latest", jobLatestHandler.Get)
 	router.GET("/deployd/successful-job", lastSuccessfulJobHandler.Get)
 
+	router.GET("/deployd/configure-web", webHandler.Get)
+	router.POST("/deployd/configure-web/submit", webIntegration.Http.ConfigureWebsite)
+
 	integration.Event.StartConsumer(ctx, deploydTopic, subscription)
+	webIntegration.Event.StartConsumer(ctx, deploydTopic, subscription)
+
+	// Events related API
 
 	handler := notifier_api.NewTopicAPI(deploydTopic)
 	// websocket version
@@ -345,50 +377,6 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 		reqId := r.URL.Query().Get("id")
 		handler.Websocket(ctx, wsWhitelist, filterWorkerLog(reqNs, srvId, reqId))(w, r, p)
 	})
-}
-
-func enableNginxUnitConfigModule(ctx context.Context, router *httprouter.Router) {
-	db, err := badger.Open(badger.DefaultOptions(config.GetString("storage.file.job-website-data")))
-	if err != nil {
-		log.Fatal().Msgf("UHUY: %v", err)
-	}
-
-	jobApp := configurewebsite.New(deploydTopic, db)
-
-	ctx, _, err = runneretcd.RunWithConfig(ctx, config.GetString("raft.etcd_config"), "job-website", jobApp)
-	if err != nil {
-		log.Fatal().Msgf("err init raft: %v", err)
-	}
-
-	jobHandler := mycontentapi.New(
-		jobApp.GetJobStore(),
-		publicBaseURL+"/job/configre-website",
-		[]string{"name"},
-	)
-
-	configureWebsiteClient := configurewebsite.NewClient(ctx)
-
-	integration := configurewebsiteintegration.New(ctx, deploydTopic, &configurewebsiteintegration.Dependencies{
-		RaftConfigureWebsite: configureWebsiteClient,
-		RepositoryUsecase:    repositoryUsecase,
-		BuildUsecase:         buildUsecase,
-		BuildArtifactUsecase: buildArtifactUsecase,
-		HostConfigUsecase:    hostConfigUsecase,
-	}, currentHost, config.GetString("nginx-unit.address"))
-
-	subscription, err := deploydTopic.Subscribe(ctx, notifier_impl.NewStandardSubscriber(nil))
-	if err != nil {
-		log.Fatal().Msgf("failed to run subscribe to a topic:  %v", err)
-	}
-
-	// dont forget to start explicitly~
-	// todo: evaluate api.. should we make it separate .., or we can automatically start (SubscribeAndStart)
-	subscription.Start()
-
-	integration.Event.StartConsumer(ctx, deploydTopic, subscription)
-
-	router.GET("/job/configure-website", jobHandler.Get)
-	router.POST("/job/configure-website/submit", integration.Http.ConfigureWebsite)
 }
 
 func enableSecretdModule(ctx context.Context, router *httprouter.Router, raftStorage *content_badgerraft.BadgerRaftApp) {

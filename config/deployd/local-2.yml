@@ -35,7 +35,6 @@ storage:
   file:
     config-data: "/data/deployd/config.db"
     job-data: "/data/deployd/job.db"
-    job-website-data: "/data/deployd/job-website.db"
 
 nginx-unit:
   address: unix:/var/run/control.unit.sock

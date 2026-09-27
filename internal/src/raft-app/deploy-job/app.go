@@ -178,56 +178,9 @@ func (m *RaftApp) OnUpdateV2(ctx context.Context, entry raft.EntryV2) (any, erro
 		}
 		return result()
 	default:
-		return nil, fmt.Errorf("unknown command: %s", cmd.Name)
+		return nil, fmt.Errorf("%w command: %s", errors.ErrUnsupported, cmd.Name)
 	}
-
 }
-
-// func (m *RaftApp) OnUpdate(ctx context.Context, e raft.Entry) (raft.OnAfterApply, error) {
-// 	// make it easier for everyone..
-// 	switch Command(e.Command) {
-// 	case CommandUserSubmitJob:
-// 		// start create job
-// 		payload, err := parseAs[entity.SubmitDeploymentJobRequest](e.Value)
-// 		if err != nil {
-// 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(e.Value))
-// 		}
-// 		return m.userSubmitJob(ctx, payload)
-// 	case CommandUserCancelJob:
-// 		// explicitly cancelling job, we cancel
-// 		payload, err := parseAs[CancelJobRequest](e.Value)
-// 		if err != nil {
-// 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(e.Value))
-// 		}
-// 		return m.cancelJob(ctx, payload)
-// 	case CommandHostConfigurationUpdate:
-// 		// feed installation (sub)state update to raft
-// 		payload, err := parseAs[ConfigurationUpdateRequest](e.Value)
-// 		if err != nil {
-// 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(e.Value))
-// 		}
-// 		return m.applyHostConfigurationUpdate(ctx, payload)
-// 	case CommandRestartConfirmation:
-// 		// if restart is confirmed, we do restart
-// 		payload, err := parseAs[RestartConfirmation](e.Value)
-// 		if err != nil {
-// 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(e.Value))
-// 		}
-// 		return m.restartHostService(ctx, payload)
-// 	case CommandHostRestartServiceUpdate:
-// 		// feed deployment update (sub)state update to raft
-// 		payload, err := parseAs[HostRestartServiceUpdateRequest](e.Value)
-// 		if err != nil {
-// 			return nil, fmt.Errorf("%w: failed to parse command as JSON (%v)", err, string(e.Value))
-// 		}
-// 		return m.applyHostRestartServiceUpdate(ctx, payload)
-// 	}
-
-// 	// fallback to the base
-// 	return func() (raft.Result, error) {
-// 		return raft.Result{}, nil
-// 	}, nil
-// }
 
 // Because we're using Golang composition / aka inheritance, we do not need to implement the rest of raft.Application method.
 // Later if we have multiple ContentApp, then you need to implement it to make sure all method are executed.

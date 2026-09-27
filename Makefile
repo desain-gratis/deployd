@@ -34,10 +34,10 @@ submit-job:
 	curl -X POST -H 'X-Namespace: *' 'http://localhost:9401/deployd/submit-job' -d'@submit-sample.json' | jq
 
 submit-job-website:
-	curl -X POST -H 'X-Namespace: *' 'http://localhost:9401/job/configure-website/submit' -d'@configure-website.json'  | jq
+	curl -X POST -H 'X-Namespace: *' 'http://localhost:9401/deployd/configure-web/submit' -d'@configure-website.json'  | jq
 
 submit-job-website-from-url:
-	curl -X POST -H 'X-Namespace: *' 'http://localhost:9401/job/configure-website/submit' -d'@configure-website-from-url.json'  | jq
+	curl -X POST -H 'X-Namespace: *' 'http://localhost:9401/deployd/configure-web/submit' -d'@configure-website-from-url.json'  | jq
 
 submit-job-mb:
 	curl -X POST -H 'X-Namespace: *' 'http://mb1:9600/deployd/submit-job' -d'@submit-sample-mb.json' | jq
@@ -46,7 +46,7 @@ get-job:
 	curl -X GET -H 'X-Namespace: *' 'http://localhost:9401/deployd/job' | jq
 
 get-job-website:
-	curl -X GET -H 'X-Namespace: *' 'http://localhost:9401/job/configure-website' | jq
+	curl -X GET -H 'X-Namespace: deployd' 'http://localhost:9401/deployd/configure-web?name=configure-website' | jq
 
 get-job-mb:
 	curl -X GET -H 'X-Namespace: *' 'http://mb1:9600/deployd/job' | jq

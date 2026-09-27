@@ -108,7 +108,7 @@ func (m *RaftApp) OnUpdateV2(ctx context.Context, entry raft.EntryV2) (any, erro
 		}
 		return result()
 	default:
-		return nil, fmt.Errorf("unknown command: %s", cmd.Name)
+		return nil, fmt.Errorf("%w command: %s", errors.ErrUnsupported, cmd.Name)
 	}
 
 }
