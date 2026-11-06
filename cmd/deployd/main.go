@@ -166,6 +166,12 @@ func main() {
 
 	enableUI(appCtx, router)
 
+	// run the config raft
+	err = raftClient.Run(appCtx, nil)
+	if err != nil {
+		log.Err(err).Msgf("failed to run raft")
+	}
+
 	err = initHostInformation(rctx)
 	if err != nil {
 		log.Err(err).Msgf("failed to initialize host in deployd")
@@ -296,6 +302,12 @@ func enableJobModule(appCtx context.Context, router *httprouter.Router) {
 		publicBaseURL+"/job/configure-website",
 		[]string{"name"},
 	)
+
+	// run the "job" raft
+	err = raftClient.Run(appCtx, nil)
+	if err != nil {
+		log.Err(err).Msgf("failed to run raft")
+	}
 
 	raftDeployJobClient = deployjob.NewClient(raftCtx)
 	raftConfigureWebsiteClient = configurewebsite.NewClient(raftCtx)
