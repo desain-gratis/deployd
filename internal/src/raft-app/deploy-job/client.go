@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	dgraft "github.com/desain-gratis/common/lib/raft"
 	runneretcd "github.com/desain-gratis/common/lib/raft/runner-etcd"
-	"github.com/rs/zerolog/log"
 
 	"github.com/desain-gratis/deployd/src/entity"
 )
@@ -38,10 +36,7 @@ type Client struct {
 func NewClient(ctx context.Context) *Client {
 	// client for "worker" / "local integration" to communicate with Raft app
 
-	rCtx, ok := dgraft.GetRaftContext(ctx).(*runneretcd.RaftContext)
-	if !ok {
-		log.Fatal().Msgf("not an etcd raft runner")
-	}
+	rCtx := runneretcd.GetRaftContext(ctx)
 
 	return &Client{
 		etcdRaftCtx: rCtx,

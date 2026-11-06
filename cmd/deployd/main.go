@@ -150,22 +150,23 @@ func main() {
 
 	// Run the raft app
 	// This is all the place to store configuration (mycontent maxxing)
-	ctx, _, err := runneretcd.RunWithConfig(appCtx, config.GetString("raft.etcd_config"), "deployd", badgerStorageApp)
+	raftClient, _, err := runneretcd.RunWithConfig(appCtx, config.GetString("raft.etcd_config"), "deployd", badgerStorageApp)
 	if err != nil {
 		log.Fatal().Msgf("err init raft: %v", err)
 	}
-	enableArtifactdModule(ctx, router, badgerStorageApp)
-	enableDeploydModule(ctx, router, badgerStorageApp)
-	enableSecretdModule(ctx, router, badgerStorageApp)
+	rctx := runneretcd.WithRaftContext(appCtx, raftClient)
+	enableArtifactdModule(rctx, router, badgerStorageApp)
+	enableDeploydModule(rctx, router, badgerStorageApp)
+	enableSecretdModule(rctx, router, badgerStorageApp)
 
 	// This is our replicated raft state-machine app for deployment job.
 	// It can also exposes mycontent datastore for easy access (read only).
 	// All write command are managed by the application
-	enableJobModule(ctx, router)
+	enableJobModule(rctx, router)
 
-	enableUI(ctx, router)
+	enableUI(appCtx, router)
 
-	err = initHostInformation(ctx)
+	err = initHostInformation(rctx)
 	if err != nil {
 		log.Err(err).Msgf("failed to initialize host in deployd")
 	}
@@ -219,13 +220,13 @@ func enableSystemdModule(ctx context.Context, router *httprouter.Router) {
 	router.GET("/ws", httpIntegration.StreamUnit)
 }
 
-func enableJobModule(ctx context.Context, router *httprouter.Router) {
-	subscription, err := deploydTopic.Subscribe(ctx, notifier_impl.NewStandardSubscriber(nil))
+func enableJobModule(appCtx context.Context, router *httprouter.Router) {
+	subscription, err := deploydTopic.Subscribe(appCtx, notifier_impl.NewStandardSubscriber(nil))
 	if err != nil {
 		log.Fatal().Msgf("failed to run subscribe to a topic:  %v", err)
 	}
 
-	logSubscription, err := deploydTopic.Subscribe(ctx, notifier_impl.NewStandardSubscriber(nil))
+	logSubscription, err := deploydTopic.Subscribe(appCtx, notifier_impl.NewStandardSubscriber(nil))
 	if err != nil {
 		log.Fatal().Msgf("failed to run subscribe to a topic:  %v", err)
 	}
@@ -254,14 +255,16 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	webApp := configurewebsite.New(deploydTopic, db)
 
 	// multi allows multiple app in a single raft replica
-	ctx, _, err = runneretcd.RunWithConfig(
-		ctx,
+	raftClient, _, err := runneretcd.RunWithConfig(
+		appCtx,
 		config.GetString("raft.etcd_config"), "job",
 		multi.New(jobApp, webApp),
 	)
 	if err != nil {
 		log.Fatal().Msgf("err init raft: %v", err)
 	}
+
+	raftCtx := runneretcd.WithRaftContext(appCtx, raftClient)
 
 	// "ordinary" mycontent
 	// notice we don't need repo, because it's managed inside the job state machine app, we only get the read only version
@@ -294,13 +297,13 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 		[]string{"name"},
 	)
 
-	raftDeployJobClient = deployjob.NewClient(ctx)
-	raftConfigureWebsiteClient = configurewebsite.NewClient(ctx)
+	raftDeployJobClient = deployjob.NewClient(raftCtx)
+	raftConfigureWebsiteClient = configurewebsite.NewClient(raftCtx)
 
 	// Integrations
 
 	integration := deployjobintegration.New(
-		ctx,
+		raftCtx,
 		deploydTopic,
 		&deployjobintegration.Dependencies{
 			HostConfigUsecase:        hostConfigUsecase,
@@ -317,7 +320,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 		currentHost,
 	)
 
-	webIntegration := configurewebsiteintegration.New(ctx, deploydTopic, &configurewebsiteintegration.Dependencies{
+	webIntegration := configurewebsiteintegration.New(raftCtx, deploydTopic, &configurewebsiteintegration.Dependencies{
 		RaftConfigureWebsite: raftConfigureWebsiteClient,
 		RepositoryUsecase:    repositoryUsecase,
 		BuildUsecase:         buildUsecase,
@@ -338,8 +341,8 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 	router.GET("/deployd/configure-web", webHandler.Get)
 	router.POST("/deployd/configure-web/submit", webIntegration.Http.ConfigureWebsite)
 
-	integration.Event.StartConsumer(ctx, deploydTopic, subscription)
-	webIntegration.Event.StartConsumer(ctx, deploydTopic, subscription)
+	integration.Event.StartConsumer(raftCtx, deploydTopic, subscription)
+	webIntegration.Event.StartConsumer(raftCtx, deploydTopic, subscription)
 
 	// Events related API
 
@@ -361,7 +364,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 		reqNs := r.URL.Query().Get("namespace")
 		srvId := r.URL.Query().Get("service")
 		reqId := r.URL.Query().Get("id")
-		handler.Websocket(ctx, wsWhitelist, filterDeploymentJob(reqNs, srvId, reqId), transformDeployJobEvent)(w, r, p)
+		handler.Websocket(raftCtx, wsWhitelist, filterDeploymentJob(reqNs, srvId, reqId), transformDeployJobEvent)(w, r, p)
 	})
 
 	// real-time worker log and state update
@@ -375,7 +378,7 @@ func enableJobModule(ctx context.Context, router *httprouter.Router) {
 		reqNs := r.URL.Query().Get("namespace")
 		srvId := r.URL.Query().Get("service")
 		reqId := r.URL.Query().Get("id")
-		handler.Websocket(ctx, wsWhitelist, filterWorkerLog(reqNs, srvId, reqId))(w, r, p)
+		handler.Websocket(raftCtx, wsWhitelist, filterWorkerLog(reqNs, srvId, reqId))(w, r, p)
 	})
 }
 
