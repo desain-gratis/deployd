@@ -51,12 +51,17 @@ func (h *httpHandler) ConfigureWebsite(w http.ResponseWriter, r *http.Request, p
 
 	// populate requested data
 
-	listenAddress := make(map[string]string)
+	listenAddressInternal := make(map[string]string)
 	for _, host := range hostByName {
-		listenAddress[host.Host] = host.InternalAddress + ":80" // todo: later can be customized~
+		if req.ListenAddress == "" {
+			listenAddressInternal[host.Host] = host.InternalAddress + ":80" // todo: later can be customized~
+		} else {
+			listenAddressInternal[host.Host] = req.ListenAddress // todo: later can be customized~
+		}
 	}
 
-	req.ListenAddress = listenAddress
+	req.ListenAddressInternal = listenAddressInternal
+
 	req.Time = time.Now()
 
 	result, err := h.dependencies.RaftConfigureWebsite.ConfigureWebsite(ctx, req)

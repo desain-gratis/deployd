@@ -42,7 +42,7 @@ The service definition is:
 Download the latest release from GitHub.
 
 ```bash
-wget https://github.com/desain-gratis/deployd/releases/download/v0.0.16/deployd-linux-amd64.tar.gz -O deployd-linux-amd64.tar.gz && \
+wget https://github.com/desain-gratis/deployd/releases/download/v0.0.19/deployd-linux-amd64.tar.gz -O deployd-linux-amd64.tar.gz && \
 sudo mkdir -p /opt/deployd && \
 sudo tar -xzf deployd-linux-amd64.tar.gz -C /opt/deployd && \
 sudo chmod +x /opt/deployd/deployd

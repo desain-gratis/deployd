@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -97,7 +98,7 @@ func (w *localWorker) configureWebsite(_ notifier.Topic, jobDefinition *entity.J
 		return fmt.Errorf("failed to download website: %w", err)
 	}
 
-	err = w.updateNginxUnit(websiteDir, jobDefinition)
+	err = w.updateNginxUnit(websiteDir, jobDefinition.Request.WebsiteHostAddress, jobDefinition)
 	if err != nil { // TODO: make proper
 		return fmt.Errorf("failed updating nginx unit config: %w", err)
 	}
@@ -107,20 +108,19 @@ func (w *localWorker) configureWebsite(_ notifier.Topic, jobDefinition *entity.J
 
 func (w *localWorker) downloadWebsite(ctx context.Context, websiteDir string, jobDefinition *entity.JobConfigureWebsite) error {
 	// create temporariy dir
-	downloadLocation := "/tmp/configure-website/job-" + jobDefinition.Id + ".tar.gz"
+	downloadLocation := "/tmp/configure-website/" + jobDefinition.Request.RepositoryID + "/job-" + jobDefinition.Id + ".tar.gz"
 
 	err := ensureDir("/tmp/configure-website/" + jobDefinition.Request.RepositoryID)
 	if err != nil {
 		return fmt.Errorf("error while ensureing dir file %w", err)
 	}
 
-	osarch := fmt.Sprintf("%s/%s", w.host.OS, w.host.Architecture)
-
 	var sourceArtifact io.ReadCloser
 
 	if jobDefinition.Request.FromUrl != nil {
 		sourceArtifact, err = openFromUrl(*jobDefinition.Request.FromUrl)
 	} else {
+		osarch := fmt.Sprintf("%s/%s", w.host.OS, w.host.Architecture)
 		sourceArtifact, _, err = w.dependencies.BuildArtifactUsecase.GetAttachment(
 			ctx,
 			jobDefinition.Ns,
@@ -168,12 +168,12 @@ func (w *localWorker) downloadWebsite(ctx context.Context, websiteDir string, jo
 	return nil
 }
 
-func (w *localWorker) updateNginxUnit(targetDir string, jobDefinition *entity.JobConfigureWebsite) error {
+func (w *localWorker) updateNginxUnit(targetDir string, website string, jobDefinition *entity.JobConfigureWebsite) error {
 
 	// 1. Define the path to NGINX Unit's control socket
 	// todo: configurable
 	socketPath := "/var/run/control.unit.sock"
-	listenAddress := jobDefinition.Request.ListenAddress[w.host.Host]
+	listenAddress := jobDefinition.Request.ListenAddressInternal[w.host.Host]
 
 	// todo: more thorough validation~
 	if listenAddress == "" {
@@ -188,23 +188,19 @@ func (w *localWorker) updateNginxUnit(targetDir string, jobDefinition *entity.Jo
 	// TODO: match clauses in route
 
 	// 2. Define your NGINX Unit configuration JSON
-	configJSON := []byte(`{
-		"listeners": {
-			"` + listenAddress + `": {
-				"pass": "routes"
-			}
-		},
-		"routes": [
-			{
+	listenerCfg := []byte(`{
+		"pass": "routes/$host"
+	}`)
+
+	routesCfg := []byte(`[{
 				"action": {
 					"share": "` + targetDir + `$uri",
+					"index": "index.html",
 					"fallback": {
                     	"share": "` + notFoundPage + `"
                 	}
 				}
-			}
-		]
-	}`)
+			}]`)
 
 	// 3. Create a custom HTTP client that dials the Unix socket
 	client := &http.Client{
@@ -215,10 +211,10 @@ func (w *localWorker) updateNginxUnit(targetDir string, jobDefinition *entity.Jo
 			},
 		},
 	}
+	log.Println("CONFIGURING LISTENER")
 
-	// 4. Build the PUT request targeting Unit's local configuration endpoint
-	// The host part of the URL ("http://localhost") is ignored by the Unix dialer
-	req, err := http.NewRequest(http.MethodPut, "http://localhost/config/", bytes.NewReader(configJSON))
+	// 4. put listener
+	req, err := http.NewRequest(http.MethodPut, "http://localhost/config/listeners/"+listenAddress, bytes.NewReader(listenerCfg))
 	if err != nil {
 		fmt.Printf("Error creating request: %v\n", err)
 		return err
@@ -241,8 +237,37 @@ func (w *localWorker) updateNginxUnit(targetDir string, jobDefinition *entity.Jo
 		return err
 	}
 
-	fmt.Printf("HTTP Status: %s\n", resp.Status)
-	fmt.Printf("Response Body: %s\n", string(body))
+	log.Printf("HTTP Status: %s\n", resp.Status)
+	log.Printf("Response Body: %s\n", string(body))
+
+	log.Printf("CONFIGURING ROUTES")
+
+	// 5. put routes
+	req2, err := http.NewRequest(http.MethodPut, "http://localhost/config/routes/"+website, bytes.NewReader(routesCfg))
+	if err != nil {
+		fmt.Printf("Error creating request: %v\n", err)
+		return err
+	}
+	req2.Header.Set("Content-Type", "application/json")
+
+	// 5. Execute the request
+	resp2, err := client.Do(req2)
+	if err != nil {
+		fmt.Printf("Error connecting to Unit socket: %v\n", err)
+		fmt.Println("Tip: Make sure Go is running with sudo permissions to read/write to the socket file.")
+		return err
+	}
+	defer resp2.Body.Close()
+
+	// 6. Read and print the API response
+	body2, err := io.ReadAll(resp2.Body)
+	if err != nil {
+		fmt.Printf("Error reading response body: %v\n", err)
+		return err
+	}
+
+	log.Printf("HTTP Status: %s\n", resp2.Status)
+	log.Printf("Response Body: %s\n", string(body2))
 
 	return nil
 }

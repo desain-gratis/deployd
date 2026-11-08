@@ -2,6 +2,7 @@ package configurewebsite
 
 import (
 	"context"
+	"log"
 
 	"github.com/desain-gratis/common/lib/notifier"
 
@@ -23,7 +24,12 @@ func (w *eventHandler) StartConsumer(ctx context.Context, topic notifier.Topic, 
 			case event, _ := <-subscription.Listen():
 				switch value := event.(type) {
 				case configurewebsite.EventJobSubmitted:
-					w.localWorker.configureWebsite(topic, value.Job)
+					err := w.localWorker.configureWebsite(topic, value.Job)
+					if err != nil {
+						log.Printf("error configure website (%v): %v", value.Job.Id, err)
+						continue
+					}
+					log.Printf("successfully configured website %v", value.Job.Id)
 				default:
 				}
 			case _ = <-ctx.Done():

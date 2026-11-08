@@ -63,8 +63,11 @@ type ConfigureWebsiteRequest struct {
 	// Captured host info in which the configuration will be applied
 	TargetHosts map[string]*Host `json:"target_hosts,omitempty"`
 
+	// override listen address common to all host (eg. localhost:80 / 0.0.0.0:80)
+	ListenAddress string `json:"listen_address,omitempty"`
+
 	// <host>:<port> from target hosts
-	ListenAddress map[string]string `json:"listen_address,omitempty"`
+	ListenAddressInternal map[string]string `json:"listen_address_internal,omitempty"`
 
 	Custom404Page string `json:"custom_404_page,omitempty"`
 
