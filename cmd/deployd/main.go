@@ -60,6 +60,8 @@ var (
 
 	buildUsecase *mycontent_base.Handler[*entity.BuildArtifact]
 
+	websiteUsecase *mycontent_base.Handler[*entity.Website]
+
 	// store service's env
 	envUsecase *mycontent_base.Handler[*entity.Env]
 
@@ -136,6 +138,7 @@ func main() {
 		content_badgerraft.TableConfig{Name: "deployd__service", RefSize: 0},
 		content_badgerraft.TableConfig{Name: "deployd__raft_host", RefSize: 1},
 		content_badgerraft.TableConfig{Name: "deployd__raft_replica", RefSize: 1},
+		content_badgerraft.TableConfig{Name: "deployd__website", RefSize: 0},
 
 		// secretd module
 		content_badgerraft.TableConfig{Name: "secretd__secret", RefSize: 1, TableType: content_badgerraft.TableTypeAutoIncrement, VersionedGetLimit: 5},
@@ -486,6 +489,17 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router, raftSto
 		nil,
 	)
 
+	websiteStorage, err := raftStorage.GetKVTable(ctx, "deployd__website")
+	if err != nil {
+		log.Fatal().Msgf("%v", err)
+	}
+	websiteUsecase = mycontent_base.New[*entity.Website](websiteStorage)
+	websiteHandler := mycontentapi.New(
+		websiteUsecase,
+		publicBaseURL+"/deployd/website",
+		nil,
+	)
+
 	raftHostStore, err := raftStorage.GetKVTable(ctx, "deployd__raft_host")
 	if err != nil {
 		log.Fatal().Msgf("%v", err)
@@ -525,6 +539,10 @@ func enableDeploydModule(ctx context.Context, router *httprouter.Router, raftSto
 	// cannot be edited by user
 	// router.POST("/deployd/deployment", serviceDeploymentHandler.Post)
 	// router.DELETE("/deployd/deployment", serviceDeploymentHandler.Delete)
+
+	router.GET("/deployd/website", websiteHandler.Get)
+	router.POST("/deployd/website", websiteHandler.Post)
+	router.DELETE("/deployd/website", websiteHandler.Delete)
 
 	// Replica registry for each service.
 	// We get the source of truth from application that use deployd library.
