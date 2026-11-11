@@ -29,8 +29,8 @@ type Command string
 type Event string
 
 const (
-	TableConfigureWebsiteJob = "configure_website"
-	TableDeploymentSuccess   = "deploy_job__deployment_success"
+	TableConfigureWebsiteJob     = "configure_website"
+	TableConfigureWebsiteSuccess = "configure_website_success"
 
 	Command_User_RequestUpdateNginxUnitConfig Command = "user.request-update-ngingx-unit-config"
 	Command_Host_ConfigureWebsiteResponse     Command = "host.configure-website-result"
@@ -46,6 +46,8 @@ type RaftApp struct {
 
 	jobCache   *expirable.LRU[jobKey, *entity.JobConfigureWebsite]
 	jobUsecase *mycontent_base.Handler[*entity.JobConfigureWebsite]
+
+	successUsecase *mycontent_base.Handler[*entity.Website]
 }
 
 type jobKey struct {
@@ -65,13 +67,18 @@ var ErrRetryable = errors.New("retryable")
 
 func New(topic notifier.Topic, dbJob *badger.DB) *RaftApp {
 	jobStorage := content_badger.NewAutoIncrement(dbJob, TableConfigureWebsiteJob, 1)
+	successStorage := content_badger.New(dbJob, TableConfigureWebsiteSuccess, 0)
+
 	jobUsecase := mycontent_base.New[*entity.JobConfigureWebsite](jobStorage)
+	successUsecase := mycontent_base.New[*entity.Website](successStorage)
+
 	jobCache := expirable.NewLRU[jobKey, *entity.JobConfigureWebsite](256, nil, 20*time.Minute) // at least until the DB can catch up
 
 	return &RaftApp{
-		topic:      topic,
-		jobUsecase: jobUsecase,
-		jobCache:   jobCache,
+		topic:          topic,
+		jobUsecase:     jobUsecase,
+		jobCache:       jobCache,
+		successUsecase: successUsecase,
 	}
 }
 

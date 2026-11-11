@@ -1,4 +1,4 @@
-package configurewebsite
+package deployjob
 
 import (
 	"bytes"
@@ -18,14 +18,11 @@ import (
 	"github.com/desain-gratis/deployd/src/entity"
 )
 
-type localWorker struct {
-	nginxUnitConfigAddress string
+type localWebsiteWorker struct {
+	nginxUnitConfigAddress *string
 
 	dependencies *Dependencies
 	host         *entity.Host
-
-	// todo: can add lock
-	deploymentJobPool map[string]*configureJob
 
 	// todo: use input channel to queue job based on namespace & service
 	// map[{ns, service}]chan <- msg
@@ -40,24 +37,24 @@ type localWorker struct {
 	// TODO: use worker pool B-)
 
 	// TODO: later, after have many job types,
-	// consider this localWorker can contain multiple types of job or just single
+	// consider this localWebsiteWorker can contain multiple types of job or just single
 
 	// other types of job can be put here
 }
 
-// Local host state
-type HostDeploymentJobState struct {
-	ConfigurationStatus  entity.HostConfigurationStatus  `json:"configuration_status"`
-	RestartServiceStatus entity.HostRestartServiceStatus `json:"restart_service_status"`
-}
-
-func (w *localWorker) configureWebsite(_ notifier.Topic, jobDefinition *entity.JobConfigureWebsite) error {
+func (w *localWebsiteWorker) configureWebsite(_ notifier.Topic, jobDefinition *entity.JobConfigureWebsite) error {
 	log := w.log
 
 	if jobDefinition == nil {
 		log.Warn("empty job definition") // TODO: implement
 		return fmt.Errorf("empty job definition")
 	}
+
+	log = log.With(
+		slog.String("job-id", jobDefinition.Id),
+		slog.String("website", jobDefinition.Request.WebsiteHostAddress),
+		slog.String("build-id", jobDefinition.Request.BuildID),
+	)
 
 	var err error
 
@@ -89,24 +86,29 @@ func (w *localWorker) configureWebsite(_ notifier.Topic, jobDefinition *entity.J
 			configurewebsite.Command_Host_ConfigureWebsiteResponse,
 			result,
 		)
+		if err != nil {
+			log.Error("error configure website", slog.String("err", err.Error()))
+		}
 	}()
 
 	websiteDir := "/var/www/" + jobDefinition.Request.WebsiteHostAddress
 
 	err = w.downloadWebsite(ctx, websiteDir, jobDefinition)
 	if err != nil { // TODO: make proper
+		log.Error("error download website", slog.String("err", err.Error()))
 		return fmt.Errorf("failed to download website: %w", err)
 	}
 
 	err = w.updateNginxUnit(websiteDir, jobDefinition.Request.WebsiteHostAddress, jobDefinition)
 	if err != nil { // TODO: make proper
+		log.Error("error update nginx unit", slog.String("err", err.Error()))
 		return fmt.Errorf("failed updating nginx unit config: %w", err)
 	}
 
 	return nil
 }
 
-func (w *localWorker) downloadWebsite(ctx context.Context, websiteDir string, jobDefinition *entity.JobConfigureWebsite) error {
+func (w *localWebsiteWorker) downloadWebsite(ctx context.Context, websiteDir string, jobDefinition *entity.JobConfigureWebsite) error {
 	// create temporariy dir
 	downloadLocation := "/tmp/configure-website/" + jobDefinition.Request.RepositoryID + "/job-" + jobDefinition.Id + ".tar.gz"
 
@@ -168,7 +170,7 @@ func (w *localWorker) downloadWebsite(ctx context.Context, websiteDir string, jo
 	return nil
 }
 
-func (w *localWorker) updateNginxUnit(targetDir string, website string, jobDefinition *entity.JobConfigureWebsite) error {
+func (w *localWebsiteWorker) updateNginxUnit(targetDir string, website string, jobDefinition *entity.JobConfigureWebsite) error {
 
 	// 1. Define the path to NGINX Unit's control socket
 	// todo: configurable
@@ -270,37 +272,6 @@ func (w *localWorker) updateNginxUnit(targetDir string, website string, jobDefin
 	log.Printf("Response Body: %s\n", string(body2))
 
 	return nil
-}
-
-// GPTmaxxing
-func Copy(ctx context.Context, dst io.Writer, src io.Reader) (int, error) {
-	buf := make([]byte, 32*1024)
-	total := 0
-	for {
-		select {
-		case <-ctx.Done():
-			return 0, ctx.Err()
-		default:
-		}
-
-		n, err := src.Read(buf)
-		if n > 0 {
-			if _, werr := dst.Write(buf[:n]); werr != nil {
-				return 0, werr
-			}
-		}
-		total = total + n
-		if err != nil {
-			if err == io.EOF {
-				return total, nil
-			}
-			return 0, err
-		}
-	}
-}
-
-func ensureDir(dir string) error {
-	return os.MkdirAll(dir, 0755)
 }
 
 func openFromUrl(url string) (io.ReadCloser, error) {

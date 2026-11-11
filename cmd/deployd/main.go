@@ -30,7 +30,6 @@ import (
 
 	// raftr "github.com/desain-gratis/common/lib/raft/runner"
 	runneretcd "github.com/desain-gratis/common/lib/raft/runner-etcd"
-	configurewebsiteintegration "github.com/desain-gratis/deployd/internal/src/configure-website"
 	deployjobintegration "github.com/desain-gratis/deployd/internal/src/deploy-job"
 	configurewebsite "github.com/desain-gratis/deployd/internal/src/raft-app/configure-website"
 	deployjob "github.com/desain-gratis/deployd/internal/src/raft-app/deploy-job"
@@ -317,6 +316,7 @@ func enableJobModule(appCtx context.Context, router *httprouter.Router) {
 
 	// Integrations
 
+	nginxUnitAddr := config.GetString("nginx-unit.address")
 	integration := deployjobintegration.New(
 		raftCtx,
 		deploydTopic,
@@ -331,33 +331,35 @@ func enableJobModule(appCtx context.Context, router *httprouter.Router) {
 			JobUsecase:               jobUsecase,
 			RoutingUsecase:           routingUsecase,
 			BuildUsecase:             buildUsecase,
+
+			RaftConfigureWebsite: raftConfigureWebsiteClient,
+			NginxUnitAddress:     &nginxUnitAddr,
 		},
 		currentHost,
 	)
 
-	webIntegration := configurewebsiteintegration.New(raftCtx, deploydTopic, &configurewebsiteintegration.Dependencies{
-		RaftConfigureWebsite: raftConfigureWebsiteClient,
-		RepositoryUsecase:    repositoryUsecase,
-		BuildUsecase:         buildUsecase,
-		BuildArtifactUsecase: buildArtifactUsecase,
-		HostConfigUsecase:    hostConfigUsecase,
-	}, currentHost, config.GetString("nginx-unit.address"))
-
 	// HTTP handlers
 
-	router.POST("/deployd/submit-job", integration.Http.SubmitJob)
-	router.POST("/deployd/job/:service/:id/cancel", integration.Http.CancelJob)
-	router.POST("/deployd/job/:service/:id/proceed", integration.Http.ConfirmDeployment)
+	router.POST("/deployd/submit-job", integration.Http.SubmitJob) // deprecated
+	// router.POST("/deployd/job/:service/:id/cancel", integration.Http.CancelJob)          // deprecated
+	// router.POST("/deployd/job/:service/:id/proceed", integration.Http.ConfirmDeployment) // deprecated
 
-	router.GET("/deployd/job", jobHandler.Get)
-	router.GET("/deployd/job/latest", jobLatestHandler.Get)
-	router.GET("/deployd/successful-job", lastSuccessfulJobHandler.Get)
+	router.GET("/deployd/job", jobHandler.Get)                          // deprecated
+	router.GET("/deployd/job/latest", jobLatestHandler.Get)             // deprecated
+	router.GET("/deployd/successful-job", lastSuccessfulJobHandler.Get) // deprecated
 
-	router.GET("/deployd/configure-web", webHandler.Get)
-	router.POST("/deployd/configure-web/submit", webIntegration.Http.ConfigureWebsite)
+	router.POST("/deployd/job/deploy-service", integration.Http.SubmitJob)
+	router.POST("/deployd/job/deploy-service/:service/:id/cancel", integration.Http.CancelJob)
+	router.POST("/deployd/job/deploy-service/:service/:id/proceed", integration.Http.ConfirmDeployment)
 
-	integration.Event.StartConsumer(raftCtx, deploydTopic, subscription)
-	webIntegration.Event.StartConsumer(raftCtx, deploydTopic, subscription)
+	router.GET("/deployd/job/deploy-service", jobHandler.Get)
+	router.GET("/deployd/job/deploy-service/latest", jobLatestHandler.Get)
+	router.GET("/deployd/job/deploy-service/last-successful-job", lastSuccessfulJobHandler.Get)
+
+	router.POST("/deployd/job/deploy-website", integration.WebsiteHandler.ConfigureWebsite)
+	router.GET("/deployd/job/deploy-website", webHandler.Get)
+
+	integration.Worker.StartConsumer(raftCtx, deploydTopic, subscription)
 
 	// Events related API
 

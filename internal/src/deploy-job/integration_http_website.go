@@ -1,4 +1,4 @@
-package configurewebsite
+package deployjob
 
 import (
 	"encoding/json"
@@ -13,12 +13,12 @@ import (
 
 // HTTP interface of the deployment job
 // This one is an interface to raft as well to coordinate the job
-type httpHandler struct {
+type httpWebsiteHandler struct {
 	localWorker  *localWorker
 	dependencies *Dependencies
 }
 
-func (h *httpHandler) ConfigureWebsite(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+func (h *httpWebsiteHandler) ConfigureWebsite(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	_ = r.Header.Get("X-Namespace") //for tradition
 
 	ctx := r.Context()

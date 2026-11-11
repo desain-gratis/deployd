@@ -8,10 +8,11 @@ import (
 	"github.com/desain-gratis/common/lib/notifier"
 	"github.com/desain-gratis/deployd/src/entity"
 
+	configurewebsite "github.com/desain-gratis/deployd/internal/src/raft-app/configure-website"
 	deployjob "github.com/desain-gratis/deployd/internal/src/raft-app/deploy-job"
 )
 
-// Dependencies in the integration side (not inside raft)
+// Dependencies in the integration side (not inside raft) & configurations
 type Dependencies struct {
 	// host specific configuration
 	HostConfigUsecase *mycontent_base.Handler[*entity.Host]
@@ -39,15 +40,21 @@ type Dependencies struct {
 
 	// deploy job client
 	RaftJobUsecase *deployjob.Client
+
+	// nginx unit job client
+	RaftConfigureWebsite *configurewebsite.Client
+
+	NginxUnitAddress *string
 }
 
 // or interface
 type integration struct {
 	// Http interface for the whole deployment jobs
-	Http *httpHandler
+	Http           *httpHandler // todo: rename
+	WebsiteHandler *httpWebsiteHandler
 
 	// In process interface exposed for consuming events;
-	Event *eventHandler
+	Worker *eventHandler
 }
 
 func New(ctx context.Context, out notifier.Topic, deps *Dependencies, host *entity.Host) *integration {
@@ -58,12 +65,23 @@ func New(ctx context.Context, out notifier.Topic, deps *Dependencies, host *enti
 		host:              host,
 		deploymentJobPool: make(map[string]*deploymentJob), // TODO: use more efficient pool
 		log: logger.
-			With("host", host.Host),
+			With("host", host.Host).
+			With("job-type", "deploy_service"),
+	}
+
+	localWebWorker := &localWebsiteWorker{
+		nginxUnitConfigAddress: deps.NginxUnitAddress,
+		dependencies:           deps,
+		host:                   host,
+		log: logger.
+			With("host", host.Host).
+			With("job-type", "deploy_website"),
 	}
 
 	i := &integration{
-		Http:  &httpHandler{localWorker: localWorker, dependencies: deps},
-		Event: &eventHandler{localWorker: localWorker, dependencies: deps},
+		Http:           &httpHandler{localWorker: localWorker, dependencies: deps},
+		WebsiteHandler: &httpWebsiteHandler{localWorker: localWorker, dependencies: deps},
+		Worker:         &eventHandler{localWorker: localWorker, localWebWorker: localWebWorker, dependencies: deps},
 	}
 
 	return i
