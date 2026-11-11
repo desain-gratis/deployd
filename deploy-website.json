@@ -1,7 +1,7 @@
 {
 	"website_host_address": "chess.desain.gratis",
 	"repository_id": "raft-chess-ui",
-	"build_id": "1",
+	"build_id": "2",
 	"namespace": "deployd",
 	"listen_address": "127.0.0.1:80"
 }

@@ -75,8 +75,7 @@ type ConfigureWebsiteRequest struct {
 }
 
 type JobConfigureWebsite struct {
-	Ns   string `json:"namespace"` // static: deployd
-	Name string `json:"name"`      // static: configure-website
+	Ns string `json:"namespace"` // static: deployd
 
 	Id string `json:"id"` // it's a version (auto increment)
 
@@ -105,7 +104,7 @@ func (d *JobConfigureWebsite) Namespace() string {
 }
 
 func (d *JobConfigureWebsite) RefIDs() []string {
-	return []string{d.Name}
+	return nil
 }
 
 func (d *JobConfigureWebsite) URL() string {

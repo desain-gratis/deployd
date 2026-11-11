@@ -66,7 +66,7 @@ type ApplyResult func() (any, error)
 var ErrRetryable = errors.New("retryable")
 
 func New(topic notifier.Topic, dbJob *badger.DB) *RaftApp {
-	jobStorage := content_badger.NewAutoIncrement(dbJob, TableConfigureWebsiteJob, 1)
+	jobStorage := content_badger.NewAutoIncrement(dbJob, TableConfigureWebsiteJob, 0)
 	successStorage := content_badger.New(dbJob, TableConfigureWebsiteSuccess, 0)
 
 	jobUsecase := mycontent_base.New[*entity.JobConfigureWebsite](jobStorage)
@@ -125,7 +125,6 @@ func (m *RaftApp) OnUpdateV2(ctx context.Context, entry raft.EntryV2) (any, erro
 func (m *RaftApp) userSubmitJob(ctx context.Context, request entity.ConfigureWebsiteRequest) (ApplyResult, error) {
 	newJob, err := m.jobUsecase.Post(ctx, &entity.JobConfigureWebsite{
 		Ns:          namespace,
-		Name:        name,
 		Request:     request,
 		Status:      "QUEUED", // queued inside the raft :)
 		PublishedAt: request.Time,
