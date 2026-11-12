@@ -53,10 +53,10 @@ func (h *httpWebsiteHandler) ConfigureWebsite(w http.ResponseWriter, r *http.Req
 
 	listenAddressInternal := make(map[string]string)
 	for _, host := range hostByName {
-		if req.ListenAddress == "" {
+		if req.Website.ListenAddress == "" {
 			listenAddressInternal[host.Host] = host.InternalAddress + ":80" // todo: later can be customized~
 		} else {
-			listenAddressInternal[host.Host] = req.ListenAddress // todo: later can be customized~
+			listenAddressInternal[host.Host] = req.Website.ListenAddress // todo: later can be customized~
 		}
 	}
 

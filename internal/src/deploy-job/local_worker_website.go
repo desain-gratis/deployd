@@ -52,7 +52,7 @@ func (w *localWebsiteWorker) configureWebsite(_ notifier.Topic, jobDefinition *e
 
 	log = log.With(
 		slog.String("job-id", jobDefinition.Id),
-		slog.String("website", jobDefinition.Request.WebsiteHostAddress),
+		slog.String("website", jobDefinition.Request.Website.HostAddress),
 		slog.String("build-id", jobDefinition.Request.BuildID),
 	)
 
@@ -91,7 +91,7 @@ func (w *localWebsiteWorker) configureWebsite(_ notifier.Topic, jobDefinition *e
 		}
 	}()
 
-	websiteDir := "/var/www/" + jobDefinition.Request.WebsiteHostAddress
+	websiteDir := "/var/www/" + jobDefinition.Request.Website.HostAddress
 
 	err = w.downloadWebsite(ctx, websiteDir, jobDefinition)
 	if err != nil { // TODO: make proper
@@ -99,7 +99,7 @@ func (w *localWebsiteWorker) configureWebsite(_ notifier.Topic, jobDefinition *e
 		return fmt.Errorf("failed to download website: %w", err)
 	}
 
-	err = w.updateNginxUnit(websiteDir, jobDefinition.Request.WebsiteHostAddress, jobDefinition)
+	err = w.updateNginxUnit(websiteDir, jobDefinition.Request.Website.HostAddress, jobDefinition)
 	if err != nil { // TODO: make proper
 		log.Error("error update nginx unit", slog.String("err", err.Error()))
 		return fmt.Errorf("failed updating nginx unit config: %w", err)
@@ -110,9 +110,9 @@ func (w *localWebsiteWorker) configureWebsite(_ notifier.Topic, jobDefinition *e
 
 func (w *localWebsiteWorker) downloadWebsite(ctx context.Context, websiteDir string, jobDefinition *entity.JobConfigureWebsite) error {
 	// create temporariy dir
-	downloadLocation := "/tmp/configure-website/" + jobDefinition.Request.RepositoryID + "/job-" + jobDefinition.Id + ".tar.gz"
+	downloadLocation := "/tmp/configure-website/" + jobDefinition.Request.Website.ArtifactID + "/job-" + jobDefinition.Id + ".tar.gz"
 
-	err := ensureDir("/tmp/configure-website/" + jobDefinition.Request.RepositoryID)
+	err := ensureDir("/tmp/configure-website/" + jobDefinition.Request.Website.ArtifactID)
 	if err != nil {
 		return fmt.Errorf("error while ensureing dir file %w", err)
 	}
@@ -126,13 +126,13 @@ func (w *localWebsiteWorker) downloadWebsite(ctx context.Context, websiteDir str
 		sourceArtifact, _, err = w.dependencies.BuildArtifactUsecase.GetAttachment(
 			ctx,
 			jobDefinition.Ns,
-			[]string{jobDefinition.Request.RepositoryID, jobDefinition.Request.BuildID},
+			[]string{jobDefinition.Request.Website.ArtifactID, jobDefinition.Request.BuildID},
 			osarch, // attachment can have one to many, so we're restricting to one
 		)
 		if err != nil {
 			err = fmt.Errorf("error while getting build artifact attachment: for ns=%v repository id=%v build id=%v os/arch=%v : %w",
 				jobDefinition.Ns,
-				jobDefinition.Request.RepositoryID,
+				jobDefinition.Request.Website.ArtifactID,
 				jobDefinition.Request.BuildID,
 				osarch,
 				err,
@@ -183,8 +183,8 @@ func (w *localWebsiteWorker) updateNginxUnit(targetDir string, website string, j
 	}
 
 	notFoundPage := targetDir + "/404.html"
-	if jobDefinition.Request.Custom404Page != "" {
-		notFoundPage = jobDefinition.Request.Custom404Page
+	if jobDefinition.Request.Website.Custom404Page != "" {
+		notFoundPage = jobDefinition.Request.Website.Custom404Page
 	}
 
 	// TODO: match clauses in route

@@ -47,11 +47,7 @@ type HostUpdateResult struct {
 }
 
 type ConfigureWebsiteRequest struct {
-	// Website host name eg. example.com
-	WebsiteHostAddress string `json:"website_host_address"`
-
-	// artifactd repository ID
-	RepositoryID string `json:"repository_id"`
+	Website Website `json:"website"`
 
 	// build ID
 	BuildID string `json:"build_id"`
@@ -63,14 +59,10 @@ type ConfigureWebsiteRequest struct {
 	// Captured host info in which the configuration will be applied
 	TargetHosts map[string]*Host `json:"target_hosts,omitempty"`
 
-	// override listen address common to all host (eg. localhost:80 / 0.0.0.0:80)
-	ListenAddress string `json:"listen_address,omitempty"`
-
-	// <host>:<port> from target hosts
+	// <host>:<port> from each target hosts
 	ListenAddressInternal map[string]string `json:"listen_address_internal,omitempty"`
 
-	Custom404Page string `json:"custom_404_page,omitempty"`
-
+	// Job time
 	Time time.Time `json:"time,omitempty"`
 }
 

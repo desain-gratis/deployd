@@ -7,13 +7,17 @@ import (
 )
 
 type Website struct {
-	Ns       string `json:"namespace"`
-	HostName string `json:"host_name"`
+	Ns          string `json:"namespace"`
+	HostAddress string `json:"host_address"`
 
 	Name        string `json:"name"`
 	Description string `json:"description"`
 
 	ArtifactID string `json:"artifact_id"` // artifact used
+
+	Custom404Page string `json:"custom_404_page,omitempty"`
+
+	ListenAddress string `json:"listen_address,omitempty"`
 
 	Url         string    `json:"url"`
 	PublishedAt time.Time `json:"published_at"`
@@ -24,7 +28,7 @@ func (d *Website) CreatedTime() time.Time {
 }
 
 func (d *Website) ID() string {
-	return d.HostName
+	return d.HostAddress
 }
 
 func (d *Website) Namespace() string {
@@ -32,7 +36,7 @@ func (d *Website) Namespace() string {
 }
 
 func (d *Website) RefIDs() []string {
-	return []string{d.Name}
+	return nil
 }
 
 func (d *Website) URL() string {
@@ -50,7 +54,7 @@ func (d *Website) WithCreatedTime(t time.Time) mycontent.Data {
 }
 
 func (d *Website) WithID(id string) mycontent.Data {
-	d.HostName = id
+	d.HostAddress = id
 	return d
 }
 
