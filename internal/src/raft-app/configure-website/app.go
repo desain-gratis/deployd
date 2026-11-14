@@ -66,7 +66,7 @@ type ApplyResult func() (any, error)
 var ErrRetryable = errors.New("retryable")
 
 func New(topic notifier.Topic, dbJob *badger.DB) *RaftApp {
-	jobStorage := content_badger.NewAutoIncrement(dbJob, TableConfigureWebsiteJob, 0)
+	jobStorage := content_badger.NewAutoIncrement(dbJob, TableConfigureWebsiteJob, 1)
 	successStorage := content_badger.New(dbJob, TableConfigureWebsiteSuccess, 0)
 
 	jobUsecase := mycontent_base.New[*entity.JobConfigureWebsite](jobStorage)

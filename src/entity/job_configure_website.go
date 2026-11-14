@@ -96,7 +96,7 @@ func (d *JobConfigureWebsite) Namespace() string {
 }
 
 func (d *JobConfigureWebsite) RefIDs() []string {
-	return nil
+	return []string{d.Request.Website.HostAddress}
 }
 
 func (d *JobConfigureWebsite) URL() string {

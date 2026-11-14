@@ -302,7 +302,7 @@ func enableJobModule(appCtx context.Context, router *httprouter.Router) {
 	webHandler := mycontentapi.New(
 		webApp.GetJobStore(),
 		publicBaseURL+"/job/configure-website",
-		nil,
+		[]string{"host_address"},
 	)
 
 	// run the "job" raft
