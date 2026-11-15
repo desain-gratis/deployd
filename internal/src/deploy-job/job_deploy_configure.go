@@ -185,7 +185,11 @@ func (a *configureHost) Execute() error {
 			tmpEnv = append(tmpEnv, fmt.Sprintf("%v=%v", strings.ToUpper(k), strconv.Quote(v)))
 		}
 
-		for k, v := range env.ValueByHost {
+		for k, hv := range env.ValueByHost {
+			v, ok := hv[a.host.Host]
+			if !ok {
+				continue
+			}
 			tmpEnv = append(tmpEnv, fmt.Sprintf("%v=%v", strings.ToUpper(k), strconv.Quote(v)))
 		}
 
