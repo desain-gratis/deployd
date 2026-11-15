@@ -60,27 +60,31 @@ func (w *localWebsiteWorker) configureWebsite(_ notifier.Topic, jobDefinition *e
 
 	ctx := context.Background()
 
+	updateTime := time.Now()
+
+	result := entity.HostUpdateResult{
+		Status:             entity.JobConfigureWebsiteStatusConfiguring,
+		HostID:             w.host.Host,
+		JobID:              jobDefinition.Id,
+		Error:              nil,
+		Time:               &updateTime,
+		WebsiteHostAddress: jobDefinition.Request.Website.HostAddress,
+	}
+
 	defer func() {
 		updateTime := time.Now()
-		result := entity.HostUpdateResult{
-			Status:  entity.JobConfigureWebsiteStatusSuccess,
-			Message: "success loh yaa",
-			HostID:  w.host.Host,
-			JobID:   jobDefinition.Id,
-			Error:   nil,
-			Time:    &updateTime,
-		}
+
+		result.Time = &updateTime
+		result.Status = entity.JobConfigureWebsiteStatusSuccess
+		result.Message = "success loh yaa"
+
 		if err != nil {
 			errMsg := err.Error()
-			result = entity.HostUpdateResult{
-				Status:  entity.JobConfigureWebsiteStatusFailed,
-				Message: "failed loh yaa :(",
-				HostID:  w.host.Host,
-				JobID:   jobDefinition.Id,
-				Error:   &errMsg,
-				Time:    &updateTime,
-			}
+			result.Status = entity.JobConfigureWebsiteStatusFailed
+			result.Message = "failed loh yaa :("
+			result.Error = &errMsg
 		}
+
 		_, err = w.dependencies.RaftConfigureWebsite.GenericUpdate(
 			ctx,
 			configurewebsite.Command_Host_ConfigureWebsiteResponse,

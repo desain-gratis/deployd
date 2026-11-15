@@ -142,7 +142,7 @@ func (m *RaftApp) userSubmitJob(ctx context.Context, request entity.ConfigureWeb
 }
 
 func (m *RaftApp) hostResponse(ctx context.Context, request entity.HostUpdateResult) (ApplyResult, error) {
-	currentJob, err := m.getJobByID(ctx, namespace, []string{name}, request.JobID)
+	currentJob, err := m.getJobByID(ctx, namespace, []string{request.WebsiteHostAddress}, request.JobID)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +171,7 @@ func (m *RaftApp) hostResponse(ctx context.Context, request entity.HostUpdateRes
 	if finished == len(currentJob.Request.TargetHosts) {
 		isFinished = true
 		if successfulHostResponse == finished {
-			currentJob.Status = "ZUCCESS"
+			currentJob.Status = "SUCCESS"
 			isSuccessful = true
 			currentJob.FinishedAt = request.Time
 		} else {

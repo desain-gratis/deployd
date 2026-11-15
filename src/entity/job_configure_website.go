@@ -37,12 +37,14 @@ type JobConfigureWebsiteResultByHost struct {
 }
 
 type HostUpdateResult struct {
+	WebsiteHostAddress string `json:"website_host_address"`
+	JobID              string `json:"job_id"`
+
 	Status  JobConfigureWebsiteStatus `json:"status"`
 	Error   *string                   `json:"error,omitempty"`
 	Message string                    `json:"message"`
 
 	HostID string     `json:"host_id"`
-	JobID  string     `json:"job_id"`
 	Time   *time.Time `json:"time"`
 }
 
