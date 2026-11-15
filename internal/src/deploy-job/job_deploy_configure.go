@@ -185,6 +185,10 @@ func (a *configureHost) Execute() error {
 			tmpEnv = append(tmpEnv, fmt.Sprintf("%v=%v", strings.ToUpper(k), strconv.Quote(v)))
 		}
 
+		for k, v := range env.ValueByHost {
+			tmpEnv = append(tmpEnv, fmt.Sprintf("%v=%v", strings.ToUpper(k), strconv.Quote(v)))
+		}
+
 		sort.Slice(tmpEnv, func(i, j int) bool {
 			return strings.Compare(tmpEnv[i], tmpEnv[j]) < 0
 		})

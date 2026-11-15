@@ -21,7 +21,8 @@ type KV struct {
 	Id      string `json:"id"`
 	Version uint64 `json:"version"`
 
-	Value map[string]string `json:"value"`
+	Value       map[string]string            `json:"value"`
+	ValueByHost map[string]map[string]string `json:"value_by_host"`
 
 	PublishedAt time.Time `json:"published_at" ch:"published_at"`
 	URLx        string    `json:"url"`

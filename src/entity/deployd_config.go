@@ -13,6 +13,7 @@ type Host struct {
 	Ns string `json:"namespace"`
 
 	Id uint32 `json:"id"`
+
 	// Hostname
 	Host string `json:"host"`
 
