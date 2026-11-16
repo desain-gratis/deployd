@@ -384,6 +384,20 @@ func enableJobModule(appCtx context.Context, router *httprouter.Router) {
 		handler.Websocket(raftCtx, wsWhitelist, filterDeploymentJob(reqNs, srvId, reqId), transformDeployJobEvent)(w, r, p)
 	})
 
+	router.GET("/deployd/job/deploy-website/tail", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		reqNs := r.URL.Query().Get("namespace")
+		hostAddr := r.URL.Query().Get("host_address")
+		reqId := r.URL.Query().Get("id")
+		handler.TailTransform(filterWebsiteDeploymentJob(reqNs, hostAddr, reqId), transformDeployWebsiteEvent)(w, r, p)
+	})
+
+	router.GET("/deployd/job/deploy-website/tail/ws", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		reqNs := r.URL.Query().Get("namespace")
+		hostAddr := r.URL.Query().Get("host_address")
+		reqId := r.URL.Query().Get("id")
+		handler.Websocket(raftCtx, wsWhitelist, filterWebsiteDeploymentJob(reqNs, hostAddr, reqId), transformDeployWebsiteEvent)(w, r, p)
+	})
+
 	// real-time worker log and state update
 	router.GET("/worker/deployment/tail", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		reqNs := r.URL.Query().Get("namespace")
@@ -743,6 +757,33 @@ func filterDeploymentJob(reqNs, reqService, reqId string) func(any) bool {
 	}
 }
 
+func filterWebsiteDeploymentJob(reqNs, reqService, reqId string) func(any) bool {
+	return func(msg any) bool {
+		var ns, srv, id string
+		switch t := msg.(type) {
+		case configurewebsite.EventJobCreated:
+			ns, srv, id = t.Job.Ns, t.Job.Request.Website.HostAddress, t.Job.Id
+		case configurewebsite.EventJobUpdated:
+			ns, srv, id = t.Request.Website.Ns, t.Request.Website.HostAddress, t.Id
+		}
+
+		idMatch := reqId == id
+		if reqId == "" {
+			idMatch = true
+		}
+		nsMatch := reqNs == ns
+		if reqNs == "*" || reqNs == "" {
+			nsMatch = true
+		}
+		srvMatch := reqService == srv
+		if reqService == "" {
+			srvMatch = true
+		}
+
+		return !(nsMatch && idMatch && srvMatch)
+	}
+}
+
 func filterWorkerLog(reqNs, reqSrv, reqId string) func(any) bool {
 	return func(msg any) bool {
 		lg, ok := msg.(deployjobintegration.Log)
@@ -813,6 +854,30 @@ func transformDeployJobEvent(msg any) any {
 		job.Target = nil
 		job.RaftConfig = nil
 		job.Request = nil
+	}
+
+	// make it fair so it's like the websocket
+	return map[string]any{
+		"table": eventName,
+		"job":   job,
+	}
+}
+
+func transformDeployWebsiteEvent(msg any) any {
+	var eventName string
+	var job *entity.JobConfigureWebsite
+
+	switch value := msg.(type) {
+	case configurewebsite.EventJobCreated:
+		eventName = "deployment-job-update"
+		job = value.Job
+	case configurewebsite.EventJobUpdated:
+		eventName = "deployment-job-update"
+		job = value
+	}
+
+	if job == nil {
+		return "-"
 	}
 
 	// make it fair so it's like the websocket

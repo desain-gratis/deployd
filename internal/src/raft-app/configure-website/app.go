@@ -117,7 +117,6 @@ func (m *RaftApp) OnUpdateV2(ctx context.Context, entry raft.EntryV2) (any, erro
 	default:
 		return nil, fmt.Errorf("%w command: %s", errors.ErrUnsupported, cmd.Name)
 	}
-
 }
 
 // Because we're using Golang composition / aka inheritance, we do not need to implement the rest of raft.Application method.
@@ -136,7 +135,7 @@ func (m *RaftApp) userSubmitJob(ctx context.Context, request entity.ConfigureWeb
 	resp := ConfigureWebsiteResponse{SubmitJobStatus: SubmitJobStatusSuccess, Job: newJob}
 
 	return func() (any, error) {
-		m.topic.Broadcast(ctx, EventJobSubmitted(resp))
+		m.topic.Broadcast(ctx, EventJobCreated(resp))
 		return resp, nil
 	}, nil
 }
@@ -179,17 +178,13 @@ func (m *RaftApp) hostResponse(ctx context.Context, request entity.HostUpdateRes
 		}
 	}
 
-	_, err = m.jobUsecase.Post(ctx, currentJob, nil)
+	result, err := m.jobUsecase.Post(ctx, currentJob, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	return func() (any, error) {
-		if isFinished && isSuccessful {
-			m.topic.Broadcast(ctx, "job completed successfully")
-		} else if isFinished {
-			m.topic.Broadcast(ctx, "job failed")
-		}
+		m.topic.Broadcast(ctx, EventJobUpdated(result))
 		return request, nil
 	}, nil
 }

@@ -19,11 +19,13 @@ type UpdateNginxUnitConfigResponse struct {
 	Job             entity.DeploymentJob        `json:"job"`
 }
 
-type EventJobSubmitted ConfigureWebsiteResponse
 type ConfigureWebsiteResponse struct {
 	SubmitJobStatus UpdateNginxUnitConfigStatus `json:"status"`
 	Job             *entity.JobConfigureWebsite `json:"job"`
 }
+
+type EventJobCreated ConfigureWebsiteResponse
+type EventJobUpdated *entity.JobConfigureWebsite
 
 type UpdateNginxUnitConfigStatus string
 

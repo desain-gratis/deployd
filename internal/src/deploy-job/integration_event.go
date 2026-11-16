@@ -35,7 +35,7 @@ func (w *eventHandler) StartConsumer(ctx context.Context, topic notifier.Topic, 
 				w.localWorker.continueRestartServiceAsUserIfEnabled(topic, value)
 
 			// we can make it parallel by using new subscription, but for now let's just use the same subscription
-			case configurewebsite.EventJobSubmitted:
+			case configurewebsite.EventJobCreated:
 				w.localWebWorker.configureWebsite(topic, value.Job)
 			default:
 			}
