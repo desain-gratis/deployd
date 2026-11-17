@@ -164,14 +164,9 @@ func (m *RaftApp) hostResponse(ctx context.Context, request entity.HostUpdateRes
 		}
 	}
 
-	var isFinished bool
-	var isSuccessful bool
-
 	if finished == len(currentJob.Request.TargetHosts) {
-		isFinished = true
 		if successfulHostResponse == finished {
 			currentJob.Status = "SUCCESS"
-			isSuccessful = true
 			currentJob.FinishedAt = request.Time
 		} else {
 			currentJob.Status = "FAILED"
