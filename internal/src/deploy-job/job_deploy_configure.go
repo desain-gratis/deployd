@@ -214,6 +214,7 @@ func (a *configureHost) Execute() error {
 		fmt.Fprintf(f, "DEPLOYD_HOST_REPLICA_ID=%v\n", a.host.RaftConfig.ReplicaID)
 		fmt.Fprintf(f, "DEPLOYD_SERVICE=%v\n", a.Job.Request.Service.Id)
 		fmt.Fprintf(f, "DEPLOYD_SERVICE_NAMESPACE=%v\n", a.Job.Request.Service.Ns)
+		fmt.Fprintf(f, "DEPLOYD_SERVICE_DEPLOY_ID=%v\n", a.Job.Id)
 		fmt.Fprintf(f, "DEPLOYD_SERVICE_BUILD_COMMIT_ID=%v\n", build.CommitID)
 		fmt.Fprintf(f, "DEPLOYD_SERVICE_BUILD_ID=%v\n", build.Id)
 		fmt.Fprintf(f, "DEPLOYD_SERVICE_BUILD_DATE=%v\n", build.PublishedAt)
