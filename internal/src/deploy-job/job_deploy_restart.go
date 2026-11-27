@@ -164,6 +164,7 @@ func Deploy(log *slog.Logger, ctx context.Context, cfg DeployConfig) error {
 	}
 	if found {
 		log.Info("draining cloudflare connection")
+
 		// 6️⃣ Stop cf
 		if err := stopService(ctx, conn, cloudflaredUnitName); err != nil {
 			log.Warn(fmt.Sprintf("warn cloudflared %v", err)) // TODO use slog, differentiate error vs notfound
@@ -172,6 +173,9 @@ func Deploy(log *slog.Logger, ctx context.Context, cfg DeployConfig) error {
 
 		defer func() {
 			log.Info("starting cloudflare routing")
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+
 			if err := startService(ctx, conn, cloudflaredUnitName); err != nil {
 				log.Warn(fmt.Sprintf("warn startcloudflared %v", err))
 			}
