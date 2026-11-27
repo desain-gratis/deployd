@@ -568,6 +568,13 @@ func configureRaft(log *slog.Logger, raftPath string, currentHost *entity.Host, 
 	e := viper.New()
 	e.SetConfigType("yaml")
 
+	// make consistent with host's ID
+	// right now the raft ID is order dependent, and based on deployment request
+	// this make it align to the host ID and avoid unexpected behaviour
+	sort.SliceStable(job.Target, func(i, j int) bool {
+		return job.Target[i].Id < job.Target[j].Id
+	})
+
 	for replicakey, replica := range job.RaftConfig.EtcdRaftReplicas {
 		// all value should be baked at job creation time
 
@@ -598,6 +605,8 @@ func configureRaft(log *slog.Logger, raftPath string, currentHost *entity.Host, 
 			join = rcfg.Join
 		}
 
+		// right now the raft config is order dependent
+		// todo: later make it not order dependent
 		e.Set("node_id", id)
 		e.Set(
 			"base_wal_dir",

@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/desain-gratis/common/lib/notifier"
@@ -99,6 +100,13 @@ func (h *httpHandler) SubmitJob(w http.ResponseWriter, r *http.Request, p httpro
 		}
 		dj.TargetHosts[idx] = *fullHostData
 	}
+
+	// make consistent with host's ID
+	// right now the raft ID is order dependent, and based on deployment request
+	// this make it align to the host ID and avoid unexpected behaviour
+	sort.SliceStable(dj.TargetHosts, func(i, j int) bool {
+		return dj.TargetHosts[i].Id < dj.TargetHosts[j].Id
+	})
 
 	dj.Service = *service
 	dj.PublishedAt = time.Now()
