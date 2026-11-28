@@ -181,13 +181,22 @@ func (a *configureHost) Execute() error {
 		build := buildData[0]
 
 		tmpEnv := make([]string, 0, len(env.Value))
-		for k, v := range env.Value {
-			tmpEnv = append(tmpEnv, fmt.Sprintf("%v=%v", strings.ToUpper(k), strconv.Quote(v)))
+
+		// by host
+		byHostKey := make(map[string]struct{})
+		for k, v := range env.ValueByHost[a.host.Host] {
+			key := strings.ToUpper(k)
+			tmpEnv = append(tmpEnv, fmt.Sprintf("%v=%v", key, strconv.Quote(v)))
+			byHostKey[key] = struct{}{}
 		}
 
-		vs := env.ValueByHost[a.host.Host]
-		for k, v := range vs {
-			tmpEnv = append(tmpEnv, fmt.Sprintf("%v=%v", strings.ToUpper(k), strconv.Quote(v)))
+		// global
+		for k, v := range env.Value {
+			key := strings.ToUpper(k)
+			if _, ok := byHostKey[key]; ok {
+				continue
+			}
+			tmpEnv = append(tmpEnv, fmt.Sprintf("%v=%v", key, strconv.Quote(v)))
 		}
 
 		sort.Slice(tmpEnv, func(i, j int) bool {
